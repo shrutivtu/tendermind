@@ -2,8 +2,6 @@
 
 AI-powered EU procurement intelligence for small and medium enterprises. TenderMind monitors the EU's official tender database (TED), understands what your company does, and surfaces relevant contract opportunities — ranked by fit and evaluated for bid/no-bid decisions using a two-agent AI pipeline.
 
-> **Portfolio project** — built to demonstrate production-grade AI agent architecture, real-time streaming, semantic search with pgvector, and multi-currency data pipelines.
-
 ---
 
 ## What it does
