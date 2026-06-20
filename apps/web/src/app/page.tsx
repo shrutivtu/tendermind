@@ -113,7 +113,7 @@ export default function Home() {
               </div>
               <h3 className="text-lg font-semibold mb-3">Scout searches live</h3>
               <p className="text-slate-400 text-sm leading-relaxed">
-                Our AI scans the EU's official procurement journal and surfaces the tenders most relevant to your business — ranked by fit, filtered by deadline.
+                Our AI scans the EU&apos;s official procurement journal and surfaces the tenders most relevant to your business — ranked by fit, filtered by deadline.
               </p>
               <div className="mt-6 flex items-center gap-2 text-xs text-emerald-400">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
