@@ -268,17 +268,6 @@ Tool use forces structured output without prompt engineering fragility. `record_
 
 ---
 
-## Roadmap
-
-- [ ] Authentication (Clerk or Supabase Auth)
-- [ ] Saved company profiles
-- [ ] Email alerts for new matches
-- [ ] Competitive intel from award notices (who wins similar tenders)
-- [ ] Deploy to Railway (API + workers) + Vercel (web)
-- [ ] Full 9,454 CPV code taxonomy
-
----
-
 ## License
 
 MIT
