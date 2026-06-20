@@ -260,7 +260,8 @@ function ScoreRing({ score }: { score: number }) {
   const circ = 2 * Math.PI * r
   const dash = (score / 100) * circ
   return (
-    <svg width="52" height="52" className="shrink-0" title={`Relevance score: ${score}/100`}>
+    <svg width="52" height="52" className="shrink-0" aria-label={`Relevance score: ${score}/100`}>
+      <title>{`Relevance score: ${score}/100`}</title>
       <circle cx="26" cy="26" r={r} fill="none" stroke="#1e293b" strokeWidth="4" />
       <circle
         cx="26" cy="26" r={r} fill="none"
