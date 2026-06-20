@@ -40,7 +40,7 @@ export default function Home() {
         <div className="relative max-w-4xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-full px-4 py-1.5 text-sm text-blue-400 mb-8">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-            Live EU procurement data · Claude AI analysis
+            Live EU procurement data · Updated daily
           </div>
 
           <h1 className="text-5xl md:text-6xl font-bold tracking-tight leading-[1.1] mb-6">
@@ -74,9 +74,9 @@ export default function Home() {
           <div className="mt-16 flex flex-wrap items-center justify-center gap-x-10 gap-y-3 text-sm text-slate-500">
             <span>🇪🇺 27 EU member states</span>
             <span className="hidden sm:block text-slate-700">·</span>
-            <span>📋 700,000+ indexed tenders</span>
+            <span>📋 700,000+ active tenders</span>
             <span className="hidden sm:block text-slate-700">·</span>
-            <span>🤖 Two-agent AI pipeline</span>
+            <span>✅ Bid/no-bid recommendation</span>
             <span className="hidden sm:block text-slate-700">·</span>
             <span>⚡ Results in &lt;2 minutes</span>
           </div>
@@ -113,11 +113,11 @@ export default function Home() {
               </div>
               <h3 className="text-lg font-semibold mb-3">Scout searches live</h3>
               <p className="text-slate-400 text-sm leading-relaxed">
-                The Scout agent converts your description into a semantic embedding and runs cosine similarity search across 700,000+ indexed EU notices in real time.
+                Our AI scans the EU's official procurement journal and surfaces the tenders most relevant to your business — ranked by fit, filtered by deadline.
               </p>
               <div className="mt-6 flex items-center gap-2 text-xs text-emerald-400">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Streaming results live via SSE
+                Results appear in real time
               </div>
             </div>
 
@@ -161,7 +161,7 @@ export default function Home() {
             <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
             <span>TenderMind</span>
           </div>
-          <p>Built with Claude AI · Data from <a href="https://ted.europa.eu" target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 transition-colors underline underline-offset-2">TED — EU Official Procurement Journal</a></p>
+          <p>Data from <a href="https://ted.europa.eu" target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 transition-colors underline underline-offset-2">TED — EU Official Procurement Journal</a></p>
         </div>
       </footer>
 
