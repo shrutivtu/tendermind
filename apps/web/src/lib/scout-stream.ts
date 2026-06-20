@@ -31,6 +31,18 @@ export interface ScoutCallbacks {
   onError:      (message: string) => void
 }
 
+// Exported for unit testing — parses one SSE line into a typed event object.
+// Returns null for blank lines, comments, or malformed JSON.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function parseSSELine(line: string): Record<string, any> | null {
+  if (!line.startsWith('data: ')) return null
+  try {
+    return JSON.parse(line.slice(6))
+  } catch {
+    return null
+  }
+}
+
 export async function runScout(
   description: string,
   country: string | undefined,
@@ -60,19 +72,17 @@ export async function runScout(
     buffer = lines.pop() ?? ''
 
     for (const line of lines) {
-      if (!line.startsWith('data: ')) continue
-      try {
-        const event = JSON.parse(line.slice(6))
-        switch (event.type) {
-          case 'status':     callbacks.onStatus(event.message); break
-          case 'candidates': callbacks.onCandidates(event.count, event.totalSearched); break
-          case 'thinking':   callbacks.onThinking(event.text); break
-          case 'match':      callbacks.onMatch(event.notice); break
-          case 'session_id': callbacks.onSessionId(event.id); break
-          case 'done':       callbacks.onDone(event.totalMatches); break
-          case 'error':      callbacks.onError(event.message); break
-        }
-      } catch { /* ignore parse errors on keep-alive pings */ }
+      const event = parseSSELine(line)
+      if (!event) continue
+      switch (event.type) {
+        case 'status':     callbacks.onStatus(event.message); break
+        case 'candidates': callbacks.onCandidates(event.count, event.totalSearched); break
+        case 'thinking':   callbacks.onThinking(event.text); break
+        case 'match':      callbacks.onMatch(event.notice); break
+        case 'session_id': callbacks.onSessionId(event.id); break
+        case 'done':       callbacks.onDone(event.totalMatches); break
+        case 'error':      callbacks.onError(event.message); break
+      }
     }
   }
 }

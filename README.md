@@ -1,5 +1,7 @@
 # TenderMind
 
+[![CI](https://github.com/shrutivtu/tendermind/actions/workflows/ci.yml/badge.svg)](https://github.com/shrutivtu/tendermind/actions/workflows/ci.yml)
+
 AI-powered EU procurement intelligence for small and medium enterprises. TenderMind monitors the EU's official tender database (TED), understands what your company does, and surfaces relevant contract opportunities — ranked by fit and evaluated for bid/no-bid decisions using a two-agent AI pipeline.
 
 ---
@@ -154,7 +156,7 @@ tendermind/
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/tendermind.git
+git clone https://github.com/shrutivtu/tendermind.git
 cd tendermind
 npm install
 ```
