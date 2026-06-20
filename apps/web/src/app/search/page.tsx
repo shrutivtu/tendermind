@@ -360,7 +360,7 @@ function ThinkingFeed({ text }: { text: string }) {
   const ref = useRef<HTMLDivElement>(null)
   return (
     <div>
-      <p className="text-xs text-slate-500 mb-2 uppercase tracking-wider">Claude's reasoning</p>
+      <p className="text-xs text-slate-500 mb-2 uppercase tracking-wider">Claude&apos;s reasoning</p>
       <div
         ref={ref}
         className="bg-slate-950 border border-slate-800 rounded-xl p-4 h-48 overflow-y-auto font-mono text-xs text-slate-400 leading-relaxed"

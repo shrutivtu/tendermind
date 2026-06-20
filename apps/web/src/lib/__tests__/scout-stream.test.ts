@@ -39,7 +39,7 @@ describe('parseSSELine', () => {
     }
     const result = parseSSELine(`data: ${JSON.stringify({ type: 'match', notice })}`)
     expect(result).toEqual({ type: 'match', notice })
-    expect(result?.notice.score).toBe(0.87)
+    expect((result as { type: string; notice: { score: number } })?.notice.score).toBe(0.87)
   })
 
   it('parses a session_id event', () => {

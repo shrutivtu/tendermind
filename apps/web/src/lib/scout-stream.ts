@@ -26,18 +26,27 @@ export interface ScoutCallbacks {
   onCandidates: (count: number, total: number) => void
   onThinking:   (text: string) => void
   onMatch:      (notice: MatchedNotice) => void
-  onSessionId:  (id: string) => void   // emitted once DB session row is created
+  onSessionId:  (id: string) => void
   onDone:       (total: number) => void
   onError:      (message: string) => void
 }
 
+// Discriminated union of all SSE event shapes emitted by the Scout agent
+export type SSEEvent =
+  | { type: 'status';     message: string }
+  | { type: 'candidates'; count: number; totalSearched: number }
+  | { type: 'thinking';   text: string }
+  | { type: 'match';      notice: MatchedNotice }
+  | { type: 'session_id'; id: string }
+  | { type: 'done';       totalMatches: number }
+  | { type: 'error';      message: string }
+
 // Exported for unit testing — parses one SSE line into a typed event object.
 // Returns null for blank lines, comments, or malformed JSON.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function parseSSELine(line: string): Record<string, any> | null {
+export function parseSSELine(line: string): SSEEvent | null {
   if (!line.startsWith('data: ')) return null
   try {
-    return JSON.parse(line.slice(6))
+    return JSON.parse(line.slice(6)) as SSEEvent
   } catch {
     return null
   }

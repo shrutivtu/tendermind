@@ -15,7 +15,7 @@ export default function Home() {
 
         <p className="text-lg text-slate-400">
           AI agents that search 700,000+ EU tenders, analyse eligibility,
-          and tell you who's winning — so your business can compete.
+          and tell you who&apos;s winning — so your business can compete.
         </p>
 
         <div className="flex items-center justify-center gap-4">
