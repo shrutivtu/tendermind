@@ -155,7 +155,7 @@ async function saveScoutResults(
   await sql`
     UPDATE search_sessions SET
       status        = 'analyst_running',
-      scout_matches = ${sql.json(matches)},
+      scout_matches = ${sql.json(matches as unknown as Record<string, unknown>[])},
       match_count   = ${matches.length},
       top_score     = ${topScore}
     WHERE id = ${sessionId}
