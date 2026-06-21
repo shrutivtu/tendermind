@@ -38,24 +38,24 @@ export default function Home() {
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative max-w-4xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-full px-4 py-1.5 text-sm text-blue-400 mb-8">
+          <div className="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-full px-4 py-1.5 text-sm text-blue-400 mb-8 animate-fade-in-up" style={{ animationDelay: '0ms' }}>
             <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
             Live EU procurement data · Updated daily
           </div>
 
-          <h1 className="text-5xl md:text-6xl font-bold tracking-tight leading-[1.1] mb-6">
+          <h1 className="text-5xl md:text-6xl font-bold tracking-tight leading-[1.1] mb-6 animate-fade-in-up" style={{ animationDelay: '80ms' }}>
             €420 billion in EU contracts.
             <br />
             <span className="text-blue-400">Find the ones you can win.</span>
           </h1>
 
-          <p className="text-xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed">
+          <p className="text-xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed animate-fade-in-up" style={{ animationDelay: '180ms' }}>
             TenderMind uses AI to scan the EU&apos;s official tender database,
             match opportunities to your company, and give you a bid/no-bid
             recommendation — in under two minutes.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-in-up" style={{ animationDelay: '280ms' }}>
             <Link
               href="/search"
               className="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 transition-all text-white font-semibold px-8 py-3.5 rounded-lg text-base shadow-lg shadow-blue-600/20 hover:shadow-blue-500/30"
@@ -71,7 +71,7 @@ export default function Home() {
           </div>
 
           {/* See live example */}
-          <p className="mt-6 text-sm text-slate-600">
+          <p className="mt-6 text-sm text-slate-600 animate-fade-in-up" style={{ animationDelay: '350ms' }}>
             Want to see what results look like first?{' '}
             <Link
               href="/sessions/113d9f96-2a87-4b61-8147-3d7dbff834b4"
@@ -82,7 +82,7 @@ export default function Home() {
           </p>
 
           {/* Social proof strip */}
-          <div className="mt-16 flex flex-wrap items-center justify-center gap-x-10 gap-y-3 text-sm text-slate-500">
+          <div className="mt-16 flex flex-wrap items-center justify-center gap-x-10 gap-y-3 text-sm text-slate-500 animate-fade-in-up" style={{ animationDelay: '420ms' }}>
             <span>🇪🇺 27 EU member states</span>
             <span className="hidden sm:block text-slate-700">·</span>
             <span>📋 700,000+ active tenders</span>
@@ -104,7 +104,7 @@ export default function Home() {
 
           <div className="grid md:grid-cols-3 gap-6">
             {/* Step 1 */}
-            <div className="relative bg-slate-900 border border-slate-800 rounded-2xl p-8 hover:border-slate-700 transition-colors">
+            <div className="relative bg-slate-900 border border-slate-800 rounded-2xl p-8 hover:border-slate-700 transition-colors animate-fade-in-scale" style={{ animationDelay: '100ms' }}>
               <div className="w-10 h-10 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center mb-6">
                 <span className="text-blue-400 font-bold text-sm">01</span>
               </div>
@@ -118,7 +118,7 @@ export default function Home() {
             </div>
 
             {/* Step 2 */}
-            <div className="relative bg-slate-900 border border-slate-800 rounded-2xl p-8 hover:border-slate-700 transition-colors">
+            <div className="relative bg-slate-900 border border-slate-800 rounded-2xl p-8 hover:border-slate-700 transition-colors animate-fade-in-scale" style={{ animationDelay: '220ms' }}>
               <div className="w-10 h-10 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center mb-6">
                 <span className="text-blue-400 font-bold text-sm">02</span>
               </div>
@@ -133,7 +133,7 @@ export default function Home() {
             </div>
 
             {/* Step 3 */}
-            <div className="relative bg-slate-900 border border-slate-800 rounded-2xl p-8 hover:border-slate-700 transition-colors">
+            <div className="relative bg-slate-900 border border-slate-800 rounded-2xl p-8 hover:border-slate-700 transition-colors animate-fade-in-scale" style={{ animationDelay: '340ms' }}>
               <div className="w-10 h-10 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center mb-6">
                 <span className="text-blue-400 font-bold text-sm">03</span>
               </div>

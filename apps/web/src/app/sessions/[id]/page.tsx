@@ -235,6 +235,72 @@ function TenderCard({
   )
 }
 
+// ─── Export ───────────────────────────────────────────────────────────────────
+
+function exportSessionReport(session: Session, matches: MatchedNotice[], evalMap: Map<string, TenderEvaluation>) {
+  const pursuing  = matches.filter(m => evalMap.get(m.id)?.recommendation === 'pursue')
+  const consider  = matches.filter(m => evalMap.get(m.id)?.recommendation === 'consider')
+  const skipping  = matches.filter(m => evalMap.get(m.id)?.recommendation === 'skip')
+  const uneval    = matches.filter(m => !evalMap.has(m.id))
+
+  function recBadge(rec: TenderEvaluation['recommendation']) {
+    const c = rec === 'pursue' ? '#059669' : rec === 'consider' ? '#d97706' : '#64748b'
+    const l = rec === 'pursue' ? '🎯 Pursue' : rec === 'consider' ? '🤔 Consider' : '⏭ Skip'
+    return `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:${c}22;color:${c};border:1px solid ${c}44">${l}</span>`
+  }
+
+  function cardHtml(m: MatchedNotice) {
+    const ev = evalMap.get(m.id)
+    return `
+    <div style="border:1px solid #e2e8f0;border-radius:12px;padding:18px;margin-bottom:14px;page-break-inside:avoid">
+      <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:10px">
+        <div style="font-size:16px;font-weight:800;color:#3b82f6;background:#dbeafe;border-radius:50%;width:48px;height:48px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${m.score}</div>
+        <div style="flex:1">
+          ${ev ? recBadge(ev.recommendation) : ''}
+          <div style="font-size:15px;font-weight:600;line-height:1.4;margin-top:6px">${m.title}</div>
+          <div style="font-size:12px;color:#64748b;margin-top:4px">${countryName(m.country)}${m.estimatedValue ? ` · ${fmtValue(m.estimatedValue)}` : ''}</div>
+        </div>
+      </div>
+      <div style="font-size:13px;color:#374151;background:#f8fafc;border-left:3px solid #3b82f6;padding:8px 12px;border-radius:0 6px 6px 0;margin-bottom:10px">${m.reason}</div>
+      ${ev ? `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px">
+        ${ev.strengths.length ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px"><strong style="color:#059669">Why you could win</strong><ul style="margin:6px 0 0;padding-left:14px;color:#374151">${ev.strengths.map(s => `<li>${s}</li>`).join('')}</ul></div>` : ''}
+        ${ev.risks.length ? `<div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:8px;padding:10px"><strong style="color:#e11d48">Risks</strong><ul style="margin:6px 0 0;padding-left:14px;color:#374151">${ev.risks.map(r => `<li>${r}</li>`).join('')}</ul></div>` : ''}
+      </div>
+      ${ev.key_requirement ? `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px;margin-top:10px;font-size:12px"><strong style="color:#d97706">Key requirement: </strong>${ev.key_requirement}</div>` : ''}
+      ` : ''}
+      <a href="${m.url}" style="font-size:12px;color:#3b82f6;margin-top:10px;display:inline-block">View on TED →</a>
+    </div>`
+  }
+
+  const html = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>TenderMind Evaluation Report</title>
+<style>* { box-sizing:border-box;margin:0;padding:0 } body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1e293b;background:#fff;padding:40px;max-width:900px;margin:0 auto } @media print { body { padding:20px } }</style>
+</head><body>
+  <div style="border-bottom:2px solid #3b82f6;padding-bottom:20px;margin-bottom:28px">
+    <div style="font-size:22px;font-weight:800;color:#3b82f6">Tender<span style="color:#1e293b">Mind</span></div>
+    <h1 style="font-size:24px;font-weight:700;margin:10px 0 4px">Evaluation Report</h1>
+    <div style="font-size:13px;color:#64748b">Generated ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+  </div>
+  <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:16px;margin-bottom:24px;font-size:14px;color:#1e293b;line-height:1.6">${session.company_description}</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px">
+    ${[['Tenders found', matches.length, '#3b82f6'], ['Pursue', pursuing.length, '#059669'], ['Consider', consider.length, '#d97706'], ['Skip', skipping.length, '#64748b']].map(([l, v, c]) =>
+    `<div style="text-align:center;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px"><div style="font-size:28px;font-weight:800;color:${c}">${v}</div><div style="font-size:12px;color:#64748b;margin-top:4px">${l}</div></div>`
+  ).join('')}
+  </div>
+  ${session.analyst_summary ? `<div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:16px;margin-bottom:28px;font-size:14px;line-height:1.6"><strong style="color:#7c3aed">Strategic Assessment</strong><p style="margin-top:8px;color:#374151">${session.analyst_summary}</p></div>` : ''}
+  ${pursuing.length ? `<h2 style="font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin:24px 0 14px">🎯 Pursue (${pursuing.length})</h2>${pursuing.map(cardHtml).join('')}` : ''}
+  ${consider.length ? `<h2 style="font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin:24px 0 14px">🤔 Consider (${consider.length})</h2>${consider.map(cardHtml).join('')}` : ''}
+  ${skipping.length ? `<h2 style="font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin:24px 0 14px">⏭ Skip (${skipping.length})</h2>${skipping.map(cardHtml).join('')}` : ''}
+  ${uneval.length ? `<h2 style="font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin:24px 0 14px">Pending evaluation (${uneval.length})</h2>${uneval.map(cardHtml).join('')}` : ''}
+</body></html>`
+
+  const blob = new Blob([html], { type: 'text/html' })
+  const url  = URL.createObjectURL(blob)
+  const win  = window.open(url, '_blank')
+  if (win) win.addEventListener('load', () => setTimeout(() => win.print(), 500))
+}
+
 // ─── Summary panel ────────────────────────────────────────────────────────────
 
 function SummaryPanel({ summary }: { summary: string }) {
@@ -345,6 +411,14 @@ export default function SessionPage() {
           </div>
           <div className="flex items-center gap-3">
             <StatusBadge status={session.status} />
+            {session.status === 'complete' && (
+              <button
+                onClick={() => exportSessionReport(session, sorted, evalMap)}
+                className="text-xs text-blue-400 hover:text-blue-300 border border-slate-700 hover:border-slate-500 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                ↓ Export PDF
+              </button>
+            )}
             <Link href="/dashboard" className="text-xs text-slate-500 hover:text-slate-300 border border-slate-700 hover:border-slate-500 px-3 py-1.5 rounded-lg transition-colors">
               All sessions →
             </Link>
