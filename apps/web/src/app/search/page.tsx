@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { runScout, type MatchedNotice } from '@/lib/scout-stream'
+
+const SAMPLE_DESCRIPTION = `We are a software consultancy specialising in custom web applications, cloud infrastructure, and data analytics for public sector organisations. Our team of 15 engineers delivers digital transformation projects — including citizen-facing portals, back-office workflow systems, and open-source integrations — primarily for local government and healthcare clients across Europe.`
 
 // ─── Country options ──────────────────────────────────────────────────────────
 const COUNTRIES = [
@@ -67,20 +69,20 @@ function HowItWorksModal({ onClose }: { onClose: () => void }) {
             {
               step: '01',
               color: 'text-blue-400',
-              title: 'Semantic embedding',
-              desc: "Your company description is converted into a 1,536-dimension vector using OpenAI's embedding model — capturing the meaning of what you do, not just keywords.",
+              title: 'Understand your company',
+              desc: "TenderMind reads your company description and learns what you do — your sector, services, and capabilities — so it can find tenders that genuinely match, not just keyword hits.",
             },
             {
               step: '02',
               color: 'text-purple-400',
-              title: 'pgvector similarity search',
-              desc: 'We run a cosine similarity search across 3,500+ live EU tenders stored in PostgreSQL + pgvector. The 25 most semantically similar notices are retrieved in milliseconds.',
+              title: 'Scan live EU tenders',
+              desc: 'We search 3,500+ tenders published in the last 48 hours across all 27 EU member states and surface the most relevant opportunities for your business.',
             },
             {
               step: '03',
               color: 'text-emerald-400',
-              title: 'Claude AI analysis',
-              desc: 'Claude reads each candidate tender and your profile, then calls a structured tool to record matches — scoring relevance 0–100 and writing a specific reason for each. Only scores ≥ 50 are shown.',
+              title: 'Score and explain each match',
+              desc: 'Every tender gets a relevance score (0–100) and a plain-English explanation of why it fits your profile. Only tenders scoring 50+ are shown.',
             },
           ].map(({ step, color, title, desc }) => (
             <div key={step} className="flex gap-4">
@@ -385,17 +387,26 @@ export default function SearchPage() {
   const [totalDone, setTotalDone]     = useState(0)
   const [error, setError]             = useState('')
   const [showHowItWorks, setShowHowItWorks] = useState(false)
+  const [isDemoMode, setIsDemoMode]   = useState(false)
 
   const thinkingRef  = useRef('')
   const descRef      = useRef('')
   const sessionIdRef = useRef('')
   const router       = useRouter()
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!description.trim()) return
+  // Detect ?demo=true and pre-fill the form
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('demo') === 'true') {
+      setDescription(SAMPLE_DESCRIPTION)
+      setIsDemoMode(true)
+    }
+  }, [])
 
-    descRef.current = description
+  const runSearch = async (desc: string, countryFilter?: string) => {
+    if (!desc.trim()) return
+
+    descRef.current = desc
     setPhase('running')
     setStatus('')
     setThinkingText('')
@@ -404,7 +415,7 @@ export default function SearchPage() {
     setCandidateCount(0)
     thinkingRef.current = ''
 
-    await runScout(description, country || undefined, {
+    await runScout(desc, countryFilter || undefined, {
       onStatus:     (msg)   => setStatus(msg),
       onCandidates: (count) => setCandidateCount(count),
       onThinking:   (text)  => {
@@ -416,14 +427,17 @@ export default function SearchPage() {
       onDone:       (total)  => {
         setTotalDone(total)
         setPhase('done')
-        // Redirect to persistent session page after a short delay
-        // so the user sees the "done" state before navigating
         if (sessionIdRef.current) {
           setTimeout(() => router.push(`/sessions/${sessionIdRef.current}`), 1200)
         }
       },
       onError: (msg) => { setError(msg); setPhase('done') },
     })
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await runSearch(description, country)
   }
 
   const reset = () => {
@@ -453,7 +467,7 @@ export default function SearchPage() {
               <span className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[10px] font-bold">?</span>
               How it works
             </button>
-            <span className="text-xs text-slate-600 hidden sm:block">Scout Agent · Claude + pgvector</span>
+            <span className="text-xs text-slate-600 hidden sm:block">Live EU procurement · Updated daily</span>
           </div>
         </div>
       </header>
@@ -471,11 +485,32 @@ export default function SearchPage() {
               </p>
             </div>
 
+            {isDemoMode && (
+              <div className="mb-6 flex items-start gap-3 bg-blue-500/10 border border-blue-500/20 rounded-xl px-4 py-3 text-sm text-blue-300">
+                <span className="mt-0.5 shrink-0">✨</span>
+                <span>
+                  <strong className="text-blue-200">Demo mode</strong> — we&apos;ve pre-filled a sample company description.
+                  Edit it to match your business or click <strong className="text-blue-200">Run Scout Agent</strong> to see how TenderMind works.
+                </span>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  What does your company do?
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-slate-300">
+                    What does your company do?
+                  </label>
+                  {!isDemoMode && (
+                    <button
+                      type="button"
+                      onClick={() => { setDescription(SAMPLE_DESCRIPTION); setIsDemoMode(true) }}
+                      className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                    >
+                      Try a sample search →
+                    </button>
+                  )}
+                </div>
                 <textarea
                   value={description}
                   onChange={e => setDescription(e.target.value)}
@@ -484,7 +519,7 @@ export default function SearchPage() {
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-blue-500 resize-none"
                   required
                 />
-                <p className="text-xs text-slate-600 mt-1">Be specific — mention your industry, services, and technical capabilities.</p>
+                <p className="text-xs text-slate-600 mt-1">Be specific — mention your industry, services, and target markets.</p>
               </div>
 
               <div>
@@ -512,9 +547,9 @@ export default function SearchPage() {
             {/* Mini explainer */}
             <div className="mt-10 grid grid-cols-3 gap-4 text-center">
               {[
-                { icon: '🔢', label: 'Embed', desc: 'Your profile → 1,536‑dim vector' },
-                { icon: '🔍', label: 'Search', desc: 'Cosine similarity across 3,500+ tenders' },
-                { icon: '🤖', label: 'Analyse', desc: 'Claude scores & explains each match' },
+                { icon: '📋', label: 'Scan', desc: '3,500+ live EU tenders, updated daily' },
+                { icon: '🎯', label: 'Match', desc: 'Ranked by relevance to your business' },
+                { icon: '📊', label: 'Decide', desc: 'Bid/no-bid with score & reasoning' },
               ].map(s => (
                 <div key={s.label} className="bg-slate-900/40 border border-slate-800 rounded-xl p-4">
                   <div className="text-2xl mb-2">{s.icon}</div>

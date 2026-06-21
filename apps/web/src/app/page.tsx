@@ -63,12 +63,23 @@ export default function Home() {
               Find tenders for my business →
             </Link>
             <Link
-              href="/dashboard"
+              href="/search?demo=true"
               className="w-full sm:w-auto border border-slate-700 hover:border-slate-500 text-slate-400 hover:text-white transition-colors font-medium px-6 py-3.5 rounded-lg text-base"
             >
-              View past sessions
+              ✨ Try a sample search
             </Link>
           </div>
+
+          {/* See live example */}
+          <p className="mt-6 text-sm text-slate-600">
+            Want to see what results look like first?{' '}
+            <Link
+              href="/sessions/113d9f96-2a87-4b61-8147-3d7dbff834b4"
+              className="text-blue-500 hover:text-blue-400 underline underline-offset-2 transition-colors"
+            >
+              See a live example →
+            </Link>
+          </p>
 
           {/* Social proof strip */}
           <div className="mt-16 flex flex-wrap items-center justify-center gap-x-10 gap-y-3 text-sm text-slate-500">
@@ -145,12 +156,20 @@ export default function Home() {
         <div className="max-w-2xl mx-auto text-center">
           <h2 className="text-3xl font-bold tracking-tight mb-4">Ready to find your next contract?</h2>
           <p className="text-slate-400 mb-8">Describe your company and get matched opportunities in under two minutes. Free to use.</p>
-          <Link
-            href="/search"
-            className="inline-block bg-blue-600 hover:bg-blue-500 transition-all text-white font-semibold px-8 py-3.5 rounded-lg shadow-lg shadow-blue-600/20 hover:shadow-blue-500/30"
-          >
-            Find tenders for my business →
-          </Link>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Link
+              href="/search"
+              className="w-full sm:w-auto inline-block bg-blue-600 hover:bg-blue-500 transition-all text-white font-semibold px-8 py-3.5 rounded-lg shadow-lg shadow-blue-600/20 hover:shadow-blue-500/30"
+            >
+              Find tenders for my business →
+            </Link>
+            <Link
+              href="/search?demo=true"
+              className="w-full sm:w-auto inline-block border border-slate-700 hover:border-slate-500 text-slate-400 hover:text-white transition-colors font-medium px-6 py-3.5 rounded-lg"
+            >
+              ✨ Try a sample search
+            </Link>
+          </div>
         </div>
       </section>
 
