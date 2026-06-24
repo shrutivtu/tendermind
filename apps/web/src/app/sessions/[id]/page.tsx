@@ -337,7 +337,7 @@ export default function SessionPage() {
   // Full load + periodic poll while analyst is running
   const fetchSession = async () => {
     try {
-      const res = await fetch(`${API}/api/sessions/${id}`)
+      const res = await fetch(`${API}/api/sessions/${id}`, { credentials: 'include' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data: Session = await res.json()
       setSession(data)

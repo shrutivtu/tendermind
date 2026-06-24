@@ -8,6 +8,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import postgres from 'postgres'
 import { embed } from '../lib/embedder.js'
 import { runAnalystAgent } from './analyst.js'
+import type { RequestContext } from '../lib/auth.js'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -136,11 +137,28 @@ Only report tenders with score >= 50. Be selective — quality over quantity.`
 async function createSession(
   sql: postgres.Sql,
   description: string,
-  country: string | undefined
+  country: string | undefined,
+  ctx: RequestContext
 ): Promise<string> {
   const rows = await sql<{ id: string }[]>`
-    INSERT INTO search_sessions (company_description, country_filter, status)
-    VALUES (${description}, ${country ?? null}, 'scout_running')
+    INSERT INTO search_sessions (
+      user_id,
+      organization_id,
+      anonymous_session_id,
+      expires_at,
+      company_description,
+      country_filter,
+      status
+    )
+    VALUES (
+      ${ctx.user?.id ?? null},
+      ${ctx.user?.organizationId ?? null},
+      ${ctx.user ? null : ctx.anonymousSessionId},
+      ${ctx.user ? null : sql`NOW() + INTERVAL '72 hours'`},
+      ${description},
+      ${country ?? null},
+      'scout_running'
+    )
     RETURNING id
   `
   return rows[0].id
@@ -180,12 +198,13 @@ async function markSessionError(
 export async function runScoutAgent(
   input: ScoutInput,
   sql: postgres.Sql,
-  onEvent: (event: AgentEvent) => void
+  onEvent: (event: AgentEvent) => void,
+  ctx: RequestContext
 ): Promise<void> {
   const maxResults = input.maxResults ?? 10
 
   // Create DB session immediately so we have an ID to emit
-  const sessionId = await createSession(sql, input.description, input.country)
+  const sessionId = await createSession(sql, input.description, input.country, ctx)
   onEvent({ type: 'session_id', id: sessionId })
 
   try {

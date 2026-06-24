@@ -5,12 +5,16 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import postgres from 'postgres'
+import { getRequestContext, requireAuth } from '../lib/auth.js'
 
 export const sessionsRoute: FastifyPluginAsync = async (app) => {
   const sql = postgres(process.env.DATABASE_URL!, { ssl: 'require' })
 
   // ─── GET /api/sessions ───────────────────────────────────────────────────
   app.get('/api/sessions', async (req, reply) => {
+    const user = await requireAuth(req, reply, sql)
+    if (!user) return
+
     const rows = await sql`
       SELECT
         s.id,
@@ -24,6 +28,7 @@ export const sessionsRoute: FastifyPluginAsync = async (app) => {
         COUNT(e.id)::int AS eval_count
       FROM search_sessions s
       LEFT JOIN tender_evaluations e ON e.session_id = s.id
+      WHERE s.organization_id = ${user.organizationId}
       GROUP BY s.id
       ORDER BY s.created_at DESC
       LIMIT 20
@@ -34,10 +39,20 @@ export const sessionsRoute: FastifyPluginAsync = async (app) => {
   // ─── GET /api/sessions/:id ───────────────────────────────────────────────
   app.get('/api/sessions/:id', async (req, reply) => {
     const { id } = req.params as { id: string }
+    const ctx = await getRequestContext(req, reply, sql)
 
-    const sessions = await sql`
-      SELECT * FROM search_sessions WHERE id = ${id}
-    `
+    const sessions = ctx.user
+      ? await sql`
+          SELECT * FROM search_sessions
+          WHERE id = ${id}
+            AND (organization_id = ${ctx.user.organizationId} OR is_public = TRUE)
+        `
+      : await sql`
+          SELECT * FROM search_sessions
+          WHERE id = ${id}
+            AND (anonymous_session_id = ${ctx.anonymousSessionId} OR is_public = TRUE)
+            AND (expires_at IS NULL OR expires_at > NOW())
+        `
     if (sessions.length === 0) return reply.status(404).send({ error: 'Session not found' })
 
     const evaluations = await sql`
@@ -57,11 +72,22 @@ export const sessionsRoute: FastifyPluginAsync = async (app) => {
   // Returns status + evaluation count + summary (once available).
   app.get('/api/sessions/:id/poll', async (req, reply) => {
     const { id } = req.params as { id: string }
+    const ctx = await getRequestContext(req, reply, sql)
 
-    const sessions = await sql`
-      SELECT id, status, match_count, top_score, analyst_summary, error_message, completed_at
-      FROM search_sessions WHERE id = ${id}
-    `
+    const sessions = ctx.user
+      ? await sql`
+          SELECT id, status, match_count, top_score, analyst_summary, error_message, completed_at
+          FROM search_sessions
+          WHERE id = ${id}
+            AND (organization_id = ${ctx.user.organizationId} OR is_public = TRUE)
+        `
+      : await sql`
+          SELECT id, status, match_count, top_score, analyst_summary, error_message, completed_at
+          FROM search_sessions
+          WHERE id = ${id}
+            AND (anonymous_session_id = ${ctx.anonymousSessionId} OR is_public = TRUE)
+            AND (expires_at IS NULL OR expires_at > NOW())
+        `
     if (sessions.length === 0) return reply.status(404).send({ error: 'Not found' })
 
     const evalCount = await sql`

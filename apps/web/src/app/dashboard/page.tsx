@@ -17,6 +17,14 @@ interface SessionRow {
   completed_at: string | null
 }
 
+interface AuthUser {
+  id: string
+  email: string
+  name: string | null
+  organizationId: string
+  role: string
+}
+
 const ALPHA3_TO_2: Record<string, string> = {
   DEU:'DE', FRA:'FR', ESP:'ES', ITA:'IT', POL:'PL', NLD:'NL',
   BEL:'BE', SWE:'SE', IRL:'IE', CZE:'CZ', ROU:'RO', HRV:'HR',
@@ -58,15 +66,35 @@ function StatusLabel({ status }: { status: string }) {
 export default function DashboardPage() {
   const [sessions, setSessions] = useState<SessionRow[]>([])
   const [loading, setLoading]   = useState(true)
+  const [user, setUser]         = useState<AuthUser | null>(null)
+  const [needsLogin, setNeedsLogin] = useState(false)
 
   const load = async () => {
     try {
-      const res = await fetch(`${API}/api/sessions`)
+      const me = await fetch(`${API}/api/auth/me`, { credentials: 'include' })
+      if (!me.ok) {
+        setNeedsLogin(true)
+        setSessions([])
+        return
+      }
+      const auth = await me.json()
+      setUser(auth.user)
+      setNeedsLogin(false)
+
+      const res = await fetch(`${API}/api/sessions`, { credentials: 'include' })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setSessions(data)
     } finally {
       setLoading(false)
     }
+  }
+
+  const logout = async () => {
+    await fetch(`${API}/api/auth/logout`, { method: 'POST', credentials: 'include' })
+    setUser(null)
+    setNeedsLogin(true)
+    setSessions([])
   }
 
   useEffect(() => {
@@ -88,10 +116,18 @@ export default function DashboardPage() {
           <Link href="/" className="text-slate-100 font-bold text-lg flex items-center gap-2">
             <span className="text-blue-400">⬡</span> TenderMind
           </Link>
-          <Link href="/search"
-            className="bg-blue-600 hover:bg-blue-500 transition-colors text-white text-sm font-semibold px-4 py-2 rounded-xl">
-            + New search
-          </Link>
+          <div className="flex items-center gap-3">
+            {user && <span className="hidden sm:block text-xs text-slate-500">{user.email}</span>}
+            {user && (
+              <button onClick={logout} className="text-xs text-slate-500 hover:text-slate-300 border border-slate-700 hover:border-slate-500 px-3 py-2 rounded-xl transition-colors">
+                Sign out
+              </button>
+            )}
+            <Link href="/search"
+              className="bg-blue-600 hover:bg-blue-500 transition-colors text-white text-sm font-semibold px-4 py-2 rounded-xl">
+              + New search
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -108,7 +144,24 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {!loading && sessions.length === 0 && (
+        {!loading && needsLogin && (
+          <div className="text-center py-20 border border-slate-800 rounded-2xl bg-slate-900/40">
+            <p className="text-sm font-semibold text-slate-200 mb-2">Create a free account to save your tender history.</p>
+            <p className="text-slate-500 text-sm mb-6 max-w-md mx-auto">
+              You can still run demo searches without signing in. The dashboard is for private saved analyses, saved tenders, and team workspaces.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Link href="/login" className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors">
+                Sign in or create account
+              </Link>
+              <Link href="/search" className="border border-slate-700 hover:border-slate-500 text-slate-300 text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors">
+                Try the AI agent first
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {!loading && !needsLogin && sessions.length === 0 && (
           <div className="text-center py-20 border border-dashed border-slate-800 rounded-2xl">
             <p className="text-slate-500 mb-4">No sessions yet.</p>
             <Link href="/search" className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors">
@@ -117,7 +170,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <div className="space-y-3">
+        {!needsLogin && <div className="space-y-3">
           {sessions.map(s => (
             <Link key={s.id} href={`/sessions/${s.id}`}
               className="block bg-slate-900/60 border border-slate-800 hover:border-slate-600 rounded-xl p-5 transition-all group">
@@ -156,7 +209,7 @@ export default function DashboardPage() {
               </div>
             </Link>
           ))}
-        </div>
+        </div>}
       </div>
     </div>
   )

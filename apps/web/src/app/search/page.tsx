@@ -296,7 +296,20 @@ export default function SearchPage() {
 
               {/* Error state */}
               {phase === 'done' && error && (
-                <SearchError message={error} onRetry={reset} />
+                <div className="space-y-4">
+                  <SearchError message={error} onRetry={reset} />
+                  {error.toLowerCase().includes('free demo searches') && (
+                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-blue-200">Ready for a private workspace?</p>
+                        <p className="text-xs text-slate-400 mt-1">Create a free account to keep going and save your analyses.</p>
+                      </div>
+                      <Link href="/login" className="text-center bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+                        Create account
+                      </Link>
+                    </div>
+                  )}
+                </div>
               )}
 
               {/* Real cards */}

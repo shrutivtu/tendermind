@@ -60,11 +60,17 @@ export async function runScout(
   const res = await fetch(`${API_URL}/api/agents/scout`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ description, country }),
   })
 
   if (!res.ok || !res.body) {
-    callbacks.onError(`API error ${res.status}`)
+    let message = `API error ${res.status}`
+    try {
+      const body = await res.json()
+      if (body?.error) message = body.error
+    } catch {}
+    callbacks.onError(message)
     return
   }
 

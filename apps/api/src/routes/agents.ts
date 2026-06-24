@@ -7,6 +7,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import postgres from 'postgres'
 import { runScoutAgent, type AgentEvent } from '../agents/scout.js'
+import { enforceSearchLimit, getRequestContext, recordSearchUsage } from '../lib/auth.js'
 
 const ScoutRequestSchema = z.object({
   description: z.string().min(10).max(2000),
@@ -26,7 +27,22 @@ export const agentsRoute: FastifyPluginAsync = async (app) => {
       return reply.status(400).send({ error: body.error.flatten() })
     }
 
+    const ctx = await getRequestContext(req, reply, sql)
+    const limit = await enforceSearchLimit(req, sql, ctx)
+    if (!limit.allowed) {
+      return reply.status(429).send({
+        error: ctx.user
+          ? `You have used your ${limit.limit} AI searches for this ${limit.window}.`
+          : `You have used your ${limit.limit} free demo searches for this ${limit.window}.`,
+        code: ctx.user ? 'USER_LIMIT_REACHED' : 'ANON_LIMIT_REACHED',
+        limit: limit.limit,
+        window: limit.window,
+      })
+    }
+    await recordSearchUsage(req, sql, ctx)
+
     const origin = (req.headers.origin as string) ?? 'http://localhost:3000'
+    const setCookie = reply.getHeader('Set-Cookie')
     reply.raw.writeHead(200, {
       'Content-Type':      'text/event-stream',
       'Cache-Control':     'no-cache',
@@ -34,6 +50,7 @@ export const agentsRoute: FastifyPluginAsync = async (app) => {
       'X-Accel-Buffering': 'no',
       'Access-Control-Allow-Origin':      origin,
       'Access-Control-Allow-Credentials': 'true',
+      ...(setCookie ? { 'Set-Cookie': setCookie } : {}),
     })
 
     const send = (event: AgentEvent) => {
@@ -50,7 +67,8 @@ export const agentsRoute: FastifyPluginAsync = async (app) => {
           cpvCodes:    body.data.cpvCodes,
         },
         sql,
-        send
+        send,
+        ctx
       )
     } finally {
       clearInterval(keepAlive)
