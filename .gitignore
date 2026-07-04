@@ -31,3 +31,8 @@ Thumbs.db
 
 # test coverage
 coverage
+
+# Agent/AI working files
+.claude/
+POLISH_INSTRUCTIONS.md
+NEXT_STEPS.md
