@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { countryName, fmtDate, fmtValue } from '@/lib/format'
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
 
@@ -32,26 +33,7 @@ interface Session {
   evaluations: TenderEvaluation[]
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const ALPHA3_TO_2: Record<string, string> = {
-  DEU:'DE', FRA:'FR', ESP:'ES', ITA:'IT', POL:'PL', NLD:'NL', BEL:'BE',
-  SWE:'SE', IRL:'IE', CZE:'CZ', ROU:'RO', HRV:'HR', GRC:'GR', PRT:'PT',
-}
-function countryName(a3: string) {
-  try { return new Intl.DisplayNames(['en'], { type: 'region' }).of(ALPHA3_TO_2[a3] ?? a3) ?? a3 }
-  catch { return a3 }
-}
-function fmtDate(s: string | null | undefined) {
-  if (!s) return null
-  return s.split('T')[0].split(' ')[0]
-}
-function fmtValue(v: number | null) {
-  if (!v) return null
-  if (v >= 1_000_000) return `€${(v / 1_000_000).toFixed(1)}M`
-  if (v >= 1_000) return `€${(v / 1_000).toFixed(0)}K`
-  return `€${v.toLocaleString()}`
-}
+type Filter = 'all' | 'pursue' | 'consider' | 'skip' | 'pending'
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
@@ -79,24 +61,16 @@ function StatusBadge({ status }: { status: string }) {
 
 function RecBadge({ rec }: { rec: TenderEvaluation['recommendation'] }) {
   const styles = {
-    pursue:  'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
-    consider:'bg-amber-500/20  text-amber-300  border-amber-500/40',
-    skip:    'bg-slate-500/20  text-slate-400  border-slate-500/40',
+    pursue:  'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+    consider:'bg-amber-500/15 text-amber-300 border-amber-500/30',
+    skip:    'bg-slate-500/15 text-slate-400 border-slate-500/30',
   }
-  const labels = { pursue: '🎯 Pursue', consider: '🤔 Consider', skip: '⏭ Skip' }
+  const labels = { pursue: 'Pursue', consider: 'Consider', skip: 'Skip' }
   return (
-    <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${styles[rec]}`}>
+    <span className={`shrink-0 text-xs font-semibold px-2.5 py-0.5 rounded-full border ${styles[rec]}`}>
       {labels[rec]}
     </span>
   )
-}
-
-// ─── Win probability pill ─────────────────────────────────────────────────────
-
-function WinPill({ prob }: { prob: TenderEvaluation['win_probability'] }) {
-  const styles = { high: 'text-emerald-400', medium: 'text-amber-400', low: 'text-red-400' }
-  const icons  = { high: '↑', medium: '→', low: '↓' }
-  return <span className={`text-xs font-semibold ${styles[prob]}`}>{icons[prob]} {prob} win probability</span>
 }
 
 // ─── Score ring ───────────────────────────────────────────────────────────────
@@ -126,95 +100,127 @@ function TenderCard({
 }) {
   const [expanded, setExpanded] = useState(false)
 
+  const meta = [
+    countryName(notice.country),
+    notice.estimatedValue ? fmtValue(notice.estimatedValue) : null,
+    notice.deadline ? `due ${fmtDate(notice.deadline)}` : null,
+  ].filter(Boolean)
+
   return (
     <div
-      className="bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden animate-fade-in transition-all duration-300"
+      className="bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden animate-fade-in hover:border-slate-600 transition-all duration-300"
       style={{ animationDelay: `${index * 60}ms` }}
     >
-      {/* Scout result row */}
+      {/* Collapsed row */}
       <div
-        className="p-5 cursor-pointer hover:bg-slate-900/80 transition-colors"
+        className="group p-5 cursor-pointer transition-colors"
         onClick={() => setExpanded(e => !e)}
       >
         <div className="flex gap-4">
           <ScoreRing score={notice.score} />
           <div className="flex-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
-                notice.fit === 'perfect' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' :
-                notice.fit === 'good'    ? 'bg-blue-500/15 text-blue-400 border-blue-500/30' :
-                                           'bg-slate-500/15 text-slate-400 border-slate-500/30'
-              }`}>
-                {notice.fit === 'perfect' ? '⭐ Perfect fit' : notice.fit === 'good' ? '✓ Good fit' : '~ Weak fit'}
-              </span>
-              <span className="text-xs text-slate-500">{countryName(notice.country)}</span>
-              {notice.estimatedValue && (
-                <span className="text-xs text-amber-400/80 font-medium">{fmtValue(notice.estimatedValue)}</span>
-              )}
-              {evaluation && <RecBadge rec={evaluation.recommendation} />}
-              <span className="ml-auto text-xs text-slate-600">{expanded ? '▲' : '▼'}</span>
+            {/* Title row — verdict is the one chip allowed */}
+            <div className="flex items-start justify-between gap-3">
+              <h3 className={`text-[15px] font-semibold text-slate-100 leading-snug ${expanded ? '' : 'line-clamp-2'}`}>
+                {notice.title}
+              </h3>
+              <div className="flex items-center gap-2 shrink-0 mt-0.5">
+                {evaluation && <RecBadge rec={evaluation.recommendation} />}
+                <span className="text-xs text-slate-600 group-hover:text-slate-400 transition-colors">
+                  {expanded ? '▲' : '▼'}
+                </span>
+              </div>
             </div>
-            <h3 className="text-sm font-semibold text-slate-100 leading-snug mb-2 line-clamp-2">{notice.title}</h3>
-            <p className="text-xs text-slate-400 leading-relaxed border-l-2 border-blue-500/40 pl-3">{notice.reason}</p>
+
+            {/* One quiet meta line */}
+            <p className="text-xs text-slate-500 mt-1.5">{meta.join(' · ')}</p>
+
+            {/* Scout's reason */}
+            <p className={`text-xs text-slate-400 leading-relaxed border-l-2 border-blue-500/40 pl-3 mt-3 ${expanded ? '' : 'line-clamp-2'}`}>
+              {notice.reason}
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Expanded: Analyst evaluation */}
+      {/* Expanded: analyst evaluation */}
       {expanded && (
-        <div className="border-t border-slate-800 p-5 space-y-4 animate-fade-in">
+        <div className="border-t border-slate-800 px-5 py-4 animate-fade-in space-y-4">
 
           {/* Tender metadata */}
-          <div className="grid grid-cols-2 gap-2 text-xs text-slate-400">
-            {notice.buyerName && <div><span className="text-slate-600">Buyer: </span>{notice.buyerName}</div>}
-            {notice.deadline  && <div><span className="text-slate-600">Deadline: </span><span className="text-orange-400">{fmtDate(notice.deadline)}</span></div>}
-            {notice.cpvCodes.length > 0 && <div className="col-span-2"><span className="text-slate-600">CPV: </span>{notice.cpvCodes.join(', ')}</div>}
-          </div>
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+            {notice.buyerName && (
+              <div className="sm:col-span-2 flex gap-2">
+                <dt className="text-slate-600 shrink-0">Buyer</dt>
+                <dd className="text-slate-300">{notice.buyerName}</dd>
+              </div>
+            )}
+            {notice.deadline && (
+              <div className="flex gap-2">
+                <dt className="text-slate-600 shrink-0">Deadline</dt>
+                <dd className="text-orange-300">{fmtDate(notice.deadline)}</dd>
+              </div>
+            )}
+            {notice.cpvCodes.length > 0 && (
+              <div className="sm:col-span-2 flex gap-2">
+                <dt className="text-slate-600 shrink-0">CPV</dt>
+                <dd className="text-slate-400">{notice.cpvCodes.join(', ')}</dd>
+              </div>
+            )}
+          </dl>
 
           {/* Analyst evaluation */}
           {evaluation ? (
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 flex-wrap">
-                <WinPill prob={evaluation.win_probability} />
-                <span className="text-xs text-slate-500">
-                  Priority: {'★'.repeat(evaluation.priority)}{'☆'.repeat(5 - evaluation.priority)}
+            <div className="space-y-4">
+              {/* Verdict facts — one inline line */}
+              <p className="text-xs text-slate-500">
+                Win probability{' '}
+                <span className={{ high: 'text-emerald-400', medium: 'text-amber-400', low: 'text-red-400' }[evaluation.win_probability] + ' font-semibold'}>
+                  {evaluation.win_probability}
                 </span>
-                <span className="text-xs text-slate-500">
-                  Bid effort: <span className={evaluation.estimated_effort === 'high' ? 'text-red-400' : evaluation.estimated_effort === 'medium' ? 'text-amber-400' : 'text-emerald-400'}>{evaluation.estimated_effort}</span>
+                <span className="mx-2 text-slate-700">·</span>
+                Priority <span className="text-slate-300">{'★'.repeat(evaluation.priority)}<span className="text-slate-700">{'★'.repeat(5 - evaluation.priority)}</span></span>
+                <span className="mx-2 text-slate-700">·</span>
+                Bid effort{' '}
+                <span className={{ low: 'text-emerald-400', medium: 'text-amber-400', high: 'text-red-400' }[evaluation.estimated_effort] + ' font-semibold'}>
+                  {evaluation.estimated_effort}
                 </span>
-              </div>
+              </p>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {evaluation.strengths.length > 0 && (
-                  <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-3">
-                    <p className="text-xs font-semibold text-emerald-400 mb-2">Why you could win</p>
-                    <ul className="space-y-1">
-                      {evaluation.strengths.map((s, i) => (
-                        <li key={i} className="text-xs text-slate-300 flex gap-1.5">
-                          <span className="text-emerald-500 shrink-0">+</span>{s}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {evaluation.risks.length > 0 && (
-                  <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-3">
-                    <p className="text-xs font-semibold text-red-400 mb-2">Risks to watch</p>
-                    <ul className="space-y-1">
-                      {evaluation.risks.map((r, i) => (
-                        <li key={i} className="text-xs text-slate-300 flex gap-1.5">
-                          <span className="text-red-500 shrink-0">!</span>{r}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
+              {/* Strengths / risks — clean two-column lists, no boxes */}
+              {(evaluation.strengths.length > 0 || evaluation.risks.length > 0) && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+                  {evaluation.strengths.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-emerald-400 mb-2">Why you could win</p>
+                      <ul className="space-y-1.5">
+                        {evaluation.strengths.map((s, i) => (
+                          <li key={i} className="text-xs text-slate-300 leading-relaxed flex gap-2">
+                            <span className="text-emerald-500 shrink-0">+</span>{s}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {evaluation.risks.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-red-400 mb-2">Risks to watch</p>
+                      <ul className="space-y-1.5">
+                        {evaluation.risks.map((r, i) => (
+                          <li key={i} className="text-xs text-slate-300 leading-relaxed flex gap-2">
+                            <span className="text-red-500 shrink-0">!</span>{r}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {evaluation.key_requirement && (
-                <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3">
-                  <p className="text-xs font-semibold text-amber-400 mb-1">Key requirement to verify</p>
-                  <p className="text-xs text-slate-300">{evaluation.key_requirement}</p>
+                <div className="border-l-2 border-amber-500/60 pl-3">
+                  <p className="text-xs font-semibold text-amber-400 mb-0.5">Key requirement to verify</p>
+                  <p className="text-xs text-slate-300 leading-relaxed">{evaluation.key_requirement}</p>
                 </div>
               )}
             </div>
@@ -310,17 +316,57 @@ function SummaryPanel({ summary }: { summary: string }) {
   const action   = parts[1]?.trim()
 
   return (
-    <div className="bg-purple-500/5 border border-purple-500/30 rounded-xl p-5 space-y-3">
-      <h3 className="text-sm font-bold text-purple-300 flex items-center gap-2">
-        <span>🧠</span> Strategic Assessment
-      </h3>
+    <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-5 space-y-3">
+      <h3 className="text-xs font-semibold text-purple-400 uppercase tracking-wider">Strategic assessment</h3>
       <p className="text-sm text-slate-300 leading-relaxed">{mainText}</p>
       {action && (
-        <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
-          <p className="text-xs font-bold text-amber-400 mb-1">Immediate action (next 48h)</p>
-          <p className="text-sm text-slate-200">{action}</p>
+        <div className="border-l-2 border-amber-500/60 pl-3">
+          <p className="text-xs font-semibold text-amber-400 mb-0.5">Immediate action (next 48h)</p>
+          <p className="text-sm text-slate-200 leading-relaxed">{action}</p>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Segmented filter ─────────────────────────────────────────────────────────
+
+function FilterTabs({
+  filter, setFilter, counts
+}: {
+  filter: Filter
+  setFilter: (f: Filter) => void
+  counts: Record<Filter, number>
+}) {
+  const tabs: { key: Filter; label: string }[] = [
+    { key: 'all',      label: 'All' },
+    { key: 'pursue',   label: 'Pursue' },
+    { key: 'consider', label: 'Consider' },
+    { key: 'skip',     label: 'Skip' },
+    ...(counts.pending > 0 ? [{ key: 'pending' as Filter, label: 'Pending' }] : []),
+  ]
+
+  return (
+    <div className="inline-flex items-center bg-slate-900/80 border border-slate-800 rounded-xl p-1 gap-0.5">
+      {tabs.map(t => {
+        const active = filter === t.key
+        return (
+          <button
+            key={t.key}
+            onClick={() => setFilter(t.key)}
+            className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-1.5 ${
+              active
+                ? 'bg-slate-700/80 text-white shadow-sm'
+                : 'text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            {t.label}
+            <span className={`text-xs tabular-nums ${active ? 'text-slate-300' : 'text-slate-600'}`}>
+              {counts[t.key]}
+            </span>
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -332,6 +378,8 @@ export default function SessionPage() {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState('')
+  const [filter, setFilter]   = useState<Filter>('all')
+  const [descOpen, setDescOpen] = useState(false)
   const pollRef = useRef<NodeJS.Timeout | null>(null)
 
   // Full load + periodic poll while analyst is running
@@ -393,15 +441,26 @@ export default function SessionPage() {
   const evalMap = new Map(evals.map(e => [e.notice_id, e]))
   const sorted  = [...matches].sort((a, b) => b.score - a.score)
 
-  const pursuing  = evals.filter(e => e.recommendation === 'pursue').length
-  const skipping  = evals.filter(e => e.recommendation === 'skip').length
+  const counts: Record<Filter, number> = {
+    all:      sorted.length,
+    pursue:   evals.filter(e => e.recommendation === 'pursue').length,
+    consider: evals.filter(e => e.recommendation === 'consider').length,
+    skip:     evals.filter(e => e.recommendation === 'skip').length,
+    pending:  sorted.filter(m => !evalMap.has(m.id)).length,
+  }
+
+  const filtered = sorted.filter(m => {
+    if (filter === 'all') return true
+    if (filter === 'pending') return !evalMap.has(m.id)
+    return evalMap.get(m.id)?.recommendation === filter
+  })
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
 
       {/* Header */}
       <header className="border-b border-slate-800/50 px-6 py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link href="/" className="text-slate-100 font-bold text-lg flex items-center gap-2">
               <span className="text-blue-400">⬡</span> TenderMind
@@ -426,32 +485,29 @@ export default function SessionPage() {
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
+      <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
 
-        {/* Session meta */}
-        <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-5">
-          <p className="text-xs text-slate-600 mb-2 uppercase tracking-wider">Company searched</p>
-          <p className="text-sm text-slate-300 leading-relaxed line-clamp-3">{session.company_description}</p>
-          <div className="flex flex-wrap gap-4 mt-3 text-xs text-slate-500">
-            {session.country_filter && <span>Country: {countryName(session.country_filter)}</span>}
-            <span>Started: {new Date(session.created_at).toLocaleString()}</span>
-            {session.completed_at && <span>Completed: {new Date(session.completed_at).toLocaleString()}</span>}
-          </div>
-        </div>
-
-        {/* Stats row */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { label: 'Tenders found', value: session.match_count, color: 'text-blue-400' },
-            { label: 'Evaluated',     value: evals.length,        color: 'text-purple-400' },
-            { label: 'Pursue',        value: pursuing,            color: 'text-emerald-400' },
-            { label: 'Skip',          value: skipping,            color: 'text-slate-400' },
-          ].map(s => (
-            <div key={s.label} className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 text-center">
-              <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
-              <div className="text-xs text-slate-500 mt-0.5">{s.label}</div>
-            </div>
-          ))}
+        {/* Session meta — one quiet expandable line, no box */}
+        <div className="text-sm">
+          <button
+            onClick={() => setDescOpen(o => !o)}
+            className="text-left w-full group"
+          >
+            <span className="text-slate-600">Searched for: </span>
+            <span className={`text-slate-300 ${descOpen ? '' : 'line-clamp-1'} inline`}>
+              {descOpen ? session.company_description : `${session.company_description.slice(0, 110)}${session.company_description.length > 110 ? '…' : ''}`}
+            </span>
+            {session.company_description.length > 110 && (
+              <span className="text-slate-600 group-hover:text-slate-400 transition-colors ml-1 text-xs">
+                {descOpen ? ' show less' : ' show more'}
+              </span>
+            )}
+          </button>
+          <p className="text-xs text-slate-600 mt-1.5">
+            {session.country_filter && <>{countryName(session.country_filter)} <span className="mx-1.5 text-slate-800">·</span></>}
+            {new Date(session.created_at).toLocaleString()}
+            {session.completed_at && <> → {new Date(session.completed_at).toLocaleTimeString()}</>}
+          </p>
         </div>
 
         {/* Strategic summary */}
@@ -475,18 +531,17 @@ export default function SessionPage() {
           </div>
         )}
 
-        {/* Tender cards */}
+        {/* Filter + tender cards */}
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">
-              {sorted.length} tender{sorted.length !== 1 ? 's' : ''} — click any to see evaluation
-            </h2>
-            <Link href="/search" className="text-xs text-blue-400 hover:text-blue-300">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+            <FilterTabs filter={filter} setFilter={setFilter} counts={counts} />
+            <Link href="/search" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
               ← New search
             </Link>
           </div>
-          <div className="space-y-3">
-            {sorted.map((notice, i) => (
+
+          <div className="space-y-3" key={filter}>
+            {filtered.map((notice, i) => (
               <TenderCard
                 key={notice.id}
                 notice={notice}
@@ -494,6 +549,11 @@ export default function SessionPage() {
                 index={i}
               />
             ))}
+            {filtered.length === 0 && (
+              <p className="text-center text-sm text-slate-600 py-12">
+                No tenders in this category.
+              </p>
+            )}
           </div>
         </div>
 

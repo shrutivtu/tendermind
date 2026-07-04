@@ -45,7 +45,7 @@ async function upsertNotices(notices: ReturnType<typeof normalizeNotice>[]): Pro
       id, type, title, title_original, description, language,
       country, buyer_name, buyer_country, cpv_codes,
       estimated_value, original_value, currency,
-      deadline, publication_date, url, raw_data
+      deadline, publication_date, url, raw_data, source
     )
     VALUES ${sql(valid.map(n => [
       n.id, n.type, n.title, n.titleOriginal, n.description, n.language,
@@ -53,6 +53,7 @@ async function upsertNotices(notices: ReturnType<typeof normalizeNotice>[]): Pro
       n.estimatedValue, n.originalValue, n.currency,
       n.deadline, n.publicationDate, n.url,
       JSON.stringify(n.rawData),
+      'ted',
     ]))}
     ON CONFLICT (id) DO UPDATE SET
       title           = EXCLUDED.title,
@@ -62,6 +63,7 @@ async function upsertNotices(notices: ReturnType<typeof normalizeNotice>[]): Pro
       original_value  = EXCLUDED.original_value,
       currency        = EXCLUDED.currency,
       deadline        = EXCLUDED.deadline,
+      source          = EXCLUDED.source,
       updated_at      = now()
   `
 }

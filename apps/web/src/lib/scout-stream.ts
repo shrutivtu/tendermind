@@ -16,6 +16,7 @@ export interface MatchedNotice {
   deadline: string | null
   publicationDate: string
   url: string
+  source: string            // 'ted' | 'find-tender'
   score: number
   reason: string
   fit: 'perfect' | 'good' | 'weak'
