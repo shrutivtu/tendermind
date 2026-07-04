@@ -19,7 +19,8 @@ await app.register(profilesRoute)
 await app.register(agentsRoute)
 await app.register(sessionsRoute)
 
-// Health check
+// Health check (Render pings /healthz)
+app.get('/healthz', async () => ({ status: 'ok' }))
 app.get('/health', async () => ({
   status: 'ok',
   service: 'tendermind-api',
