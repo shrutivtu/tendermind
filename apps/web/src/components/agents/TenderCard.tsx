@@ -27,6 +27,16 @@ export function TenderCard({ notice, index }: TenderCardProps) {
           {/* Badges row */}
           <div className="flex flex-wrap items-center gap-2 mb-2">
             <FitBadge fit={notice.fit} />
+            {/* Source badge */}
+            {notice.source === 'find-tender' ? (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-medium">
+                🇬🇧 UK
+              </span>
+            ) : (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400 font-medium">
+                🇪🇺 EU
+              </span>
+            )}
             <span className="text-xs text-slate-500">{countryName(notice.country)}</span>
             {notice.estimatedValue && (
               <span className="text-xs text-amber-400/80 font-medium">
@@ -82,7 +92,7 @@ export function TenderCard({ notice, index }: TenderCardProps) {
               onClick={e => e.stopPropagation()}
               className="text-xs text-blue-400 hover:text-blue-300 font-medium"
             >
-              View full notice on TED →
+              {notice.source === 'find-tender' ? 'View on Find a Tender →' : 'View full notice on TED →'}
             </a>
           </div>
         </div>

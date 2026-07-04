@@ -1,6 +1,7 @@
 // ─── Country dropdown options ─────────────────────────────────────────────────
 export const COUNTRIES = [
-  { code: '', label: 'All EU countries' },
+  { code: '', label: 'All countries (EU + UK)' },
+  { code: 'GBR', label: '🇬🇧 United Kingdom' },
   { code: 'DEU', label: 'Germany' },
   { code: 'FRA', label: 'France' },
   { code: 'ESP', label: 'Spain' },

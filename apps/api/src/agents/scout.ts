@@ -41,6 +41,7 @@ export interface MatchedNotice {
   deadline: string | null
   publicationDate: string
   url: string
+  source: string            // 'ted' | 'find-tender'
   score: number
   reason: string
   fit: 'perfect' | 'good' | 'weak'
@@ -59,6 +60,7 @@ interface RawNoticeRow {
   deadline: string | null
   publication_date: string
   url: string | null
+  source: string
   distance: number
 }
 
@@ -80,7 +82,7 @@ async function vectorSearch(
     SELECT
       n.id, n.title, n.buyer_name, n.country, n.cpv_codes,
       n.estimated_value, n.currency,
-      n.deadline::text, n.publication_date::text, n.url,
+      n.deadline::text, n.publication_date::text, n.url, n.source,
       ne.embedding <=> ${vectorStr}::vector AS distance
     FROM notices n
     JOIN notice_embeddings ne ON ne.notice_id = n.id
@@ -260,6 +262,7 @@ export async function runScoutAgent(
             estimatedValue: raw.estimated_value, currency: raw.currency,
             deadline: raw.deadline, publicationDate: raw.publication_date,
             url: raw.url ?? `https://ted.europa.eu/en/notice/-/detail/${raw.id}`,
+            source: raw.source ?? 'ted',
             score: ti.score, reason: ti.reason, fit: ti.fit,
           }
           matches.push(match)
@@ -282,6 +285,7 @@ export async function runScoutAgent(
               estimatedValue: raw.estimated_value, currency: raw.currency,
               deadline: raw.deadline, publicationDate: raw.publication_date,
               url: raw.url ?? `https://ted.europa.eu/en/notice/-/detail/${raw.id}`,
+              source: raw.source ?? 'ted',
               score: ti.score, reason: ti.reason, fit: ti.fit,
             }
             matches.push(match)

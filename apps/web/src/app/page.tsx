@@ -41,17 +41,17 @@ export default function Home() {
         <div className="relative max-w-4xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-full px-4 py-1.5 text-sm text-blue-400 mb-8 animate-fade-in-up" style={{ animationDelay: '0ms' }}>
             <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-            Live EU procurement data · Updated daily
+            Live EU &amp; UK procurement data · Updated daily
           </div>
 
           <h1 className="text-5xl md:text-6xl font-bold tracking-tight leading-[1.1] mb-6 animate-fade-in-up" style={{ animationDelay: '80ms' }}>
-            €420 billion in EU contracts.
+            Billions in public contracts.
             <br />
             <span className="text-blue-400">Find the ones you can win.</span>
           </h1>
 
           <p className="text-xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed animate-fade-in-up" style={{ animationDelay: '180ms' }}>
-            TenderMind uses AI to scan the EU&apos;s official tender database,
+            TenderMind uses AI to scan EU and UK official tender databases,
             match opportunities to your company, and give you a bid/no-bid
             recommendation — in under two minutes.
           </p>
@@ -84,9 +84,9 @@ export default function Home() {
 
           {/* Social proof strip */}
           <div className="mt-16 flex flex-wrap items-center justify-center gap-x-10 gap-y-3 text-sm text-slate-500 animate-fade-in-up" style={{ animationDelay: '420ms' }}>
-            <span>🇪🇺 27 EU member states</span>
+            <span>🇪🇺 EU TED database</span>
             <span className="hidden sm:block text-slate-700">·</span>
-            <span>📋 700,000+ active tenders</span>
+            <span>🇬🇧 UK Find a Tender</span>
             <span className="hidden sm:block text-slate-700">·</span>
             <span>✅ Bid/no-bid recommendation</span>
             <span className="hidden sm:block text-slate-700">·</span>
@@ -181,7 +181,12 @@ export default function Home() {
             <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
             <span>TenderMind</span>
           </div>
-          <p>Data from <a href="https://ted.europa.eu" target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 transition-colors underline underline-offset-2">TED — EU Official Procurement Journal</a></p>
+          <p>
+            Data from{' '}
+            <a href="https://ted.europa.eu" target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 transition-colors underline underline-offset-2">TED (EU)</a>
+            {' '}and{' '}
+            <a href="https://www.find-tender.service.gov.uk" target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 transition-colors underline underline-offset-2">Find a Tender (UK)</a>
+          </p>
         </div>
       </footer>
 

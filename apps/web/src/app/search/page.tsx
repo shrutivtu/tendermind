@@ -13,6 +13,7 @@ import { ThinkingFeed }    from '@/components/agents/ThinkingFeed'
 import { HowItWorksModal } from '@/components/agents/HowItWorksModal'
 import { SkeletonCard }    from '@/components/ui/SkeletonCard'
 import { SearchError }     from '@/components/ui/SearchError'
+import { CountrySelect }   from '@/components/ui/CountrySelect'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Phase = 'form' | 'running' | 'done'
@@ -22,7 +23,7 @@ const SKELETON_COUNT = 5
 
 // ─── Mini explainer data ──────────────────────────────────────────────────────
 const EXPLAINER_STEPS = [
-  { icon: '📋', label: 'Scan',   desc: '3,500+ live EU tenders, updated daily' },
+  { icon: '📋', label: 'Scan',   desc: 'EU & UK public tenders, updated daily' },
   { icon: '🎯', label: 'Match',  desc: 'Ranked by relevance to your business' },
   { icon: '📊', label: 'Decide', desc: 'Bid/no-bid with score & reasoning' },
 ] as const
@@ -124,7 +125,7 @@ export default function SearchPage() {
               <span className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[10px] font-bold">?</span>
               How it works
             </button>
-            <span className="text-xs text-slate-600 hidden sm:block">Live EU procurement · Updated daily</span>
+            <span className="text-xs text-slate-600 hidden sm:block">EU &amp; UK procurement · Updated daily</span>
           </div>
         </div>
       </header>
@@ -135,9 +136,9 @@ export default function SearchPage() {
         {phase === 'form' && (
           <div className="max-w-2xl mx-auto">
             <div className="mb-8 text-center animate-fade-in-up" style={{ animationDelay: '0ms' }}>
-              <h1 className="text-3xl font-bold mb-2">Find your EU tenders</h1>
+              <h1 className="text-3xl font-bold mb-2">Find your next public contract</h1>
               <p className="text-slate-400">
-                Describe what your company does. Our AI searches 3,500+ live EU tenders
+                Describe what your company does. Our AI searches EU and UK public tenders
                 and ranks the best matches with scored explanations.
               </p>
             </div>
@@ -184,15 +185,11 @@ export default function SearchPage() {
                 <label className="block text-sm font-medium text-slate-300 mb-2">
                   Preferred country <span className="text-slate-600 font-normal">(optional)</span>
                 </label>
-                <select
+                <CountrySelect
+                  options={COUNTRIES}
                   value={country}
-                  onChange={e => setCountry(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
-                >
-                  {COUNTRIES.map(c => (
-                    <option key={c.code} value={c.code}>{c.label}</option>
-                  ))}
-                </select>
+                  onChange={setCountry}
+                />
               </div>
 
               <button
