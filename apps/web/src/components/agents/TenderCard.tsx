@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import type { MatchedNotice } from '@/lib/scout-stream'
-import { FitBadge } from '@/components/ui/FitBadge'
 import { ScoreRing } from '@/components/ui/ScoreRing'
 import { countryName, fmtDate, fmtValue } from '@/lib/format'
 
@@ -14,6 +13,13 @@ interface TenderCardProps {
 export function TenderCard({ notice, index }: TenderCardProps) {
   const [expanded, setExpanded] = useState(false)
 
+  const isUk = notice.source === 'find-tender'
+  const meta = [
+    `${isUk ? '🇬🇧' : '🇪🇺'} ${countryName(notice.country)}`,
+    notice.estimatedValue ? fmtValue(notice.estimatedValue) : null,
+    notice.deadline ? `due ${fmtDate(notice.deadline)}` : null,
+  ].filter(Boolean)
+
   return (
     <div
       className="group bg-slate-900/60 border border-slate-800 rounded-xl p-5 hover:border-slate-600 transition-all duration-300 animate-fade-in cursor-pointer"
@@ -24,77 +30,65 @@ export function TenderCard({ notice, index }: TenderCardProps) {
         <ScoreRing score={notice.score} />
 
         <div className="flex-1 min-w-0">
-          {/* Badges row */}
-          <div className="flex flex-wrap items-center gap-2 mb-2">
-            <FitBadge fit={notice.fit} />
-            {/* Source badge */}
-            {notice.source === 'find-tender' ? (
-              <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-medium">
-                🇬🇧 UK
-              </span>
-            ) : (
-              <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400 font-medium">
-                🇪🇺 EU
-              </span>
-            )}
-            <span className="text-xs text-slate-500">{countryName(notice.country)}</span>
-            {notice.estimatedValue && (
-              <span className="text-xs text-amber-400/80 font-medium">
-                {fmtValue(notice.estimatedValue)}
-              </span>
-            )}
-            <span className="ml-auto text-xs text-slate-600 group-hover:text-slate-400 transition-colors">
-              {expanded ? '▲ less' : '▼ details'}
+          {/* Title row — the dominant element */}
+          <div className="flex items-start justify-between gap-3">
+            <h3 className={`text-[15px] font-semibold text-slate-100 leading-snug ${expanded ? '' : 'line-clamp-2'}`}>
+              {notice.title}
+            </h3>
+            <span className="shrink-0 mt-1 text-slate-600 group-hover:text-slate-400 transition-colors text-xs">
+              {expanded ? '▲' : '▼'}
             </span>
           </div>
 
-          {/* Title */}
-          <h3 className="text-sm font-semibold text-slate-100 leading-snug mb-2 line-clamp-2">
-            {notice.title}
-          </h3>
+          {/* One quiet meta line */}
+          <p className="text-xs text-slate-500 mt-1.5">
+            {meta.join(' · ')}
+          </p>
 
-          {/* AI reason — always visible */}
-          <p className="text-xs text-slate-400 leading-relaxed border-l-2 border-blue-500/40 pl-3 mb-3">
+          {/* AI reason */}
+          <p className={`text-xs text-slate-400 leading-relaxed border-l-2 border-blue-500/40 pl-3 mt-3 ${expanded ? '' : 'line-clamp-2'}`}>
             {notice.reason}
           </p>
 
           {/* Expanded details */}
           {expanded && (
-            <div className="mt-3 pt-3 border-t border-slate-800 space-y-2 animate-fade-in">
-              {notice.buyerName && (
-                <div className="text-xs text-slate-400">
-                  <span className="text-slate-600">Buyer: </span>{notice.buyerName}
+            <div className="mt-4 pt-4 border-t border-slate-800 animate-fade-in space-y-3">
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+                {notice.buyerName && (
+                  <div className="sm:col-span-2 flex gap-2">
+                    <dt className="text-slate-600 shrink-0">Buyer</dt>
+                    <dd className="text-slate-300">{notice.buyerName}</dd>
+                  </div>
+                )}
+                {notice.deadline && (
+                  <div className="flex gap-2">
+                    <dt className="text-slate-600 shrink-0">Deadline</dt>
+                    <dd className="text-orange-300">{fmtDate(notice.deadline)}</dd>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <dt className="text-slate-600 shrink-0">Published</dt>
+                  <dd className="text-slate-300">{fmtDate(notice.publicationDate)}</dd>
                 </div>
-              )}
-              {notice.cpvCodes.length > 0 && (
-                <div className="text-xs text-slate-400">
-                  <span className="text-slate-600">CPV codes: </span>
-                  {notice.cpvCodes.join(', ')}
-                </div>
-              )}
-              {notice.deadline && (
-                <div className="text-xs text-slate-400">
-                  <span className="text-slate-600">Submission deadline: </span>
-                  <span className="text-orange-400">{fmtDate(notice.deadline)}</span>
-                </div>
-              )}
-              <div className="text-xs text-slate-400">
-                <span className="text-slate-600">Published: </span>{fmtDate(notice.publicationDate)}
-              </div>
+                {notice.cpvCodes.length > 0 && (
+                  <div className="sm:col-span-2 flex gap-2">
+                    <dt className="text-slate-600 shrink-0">CPV</dt>
+                    <dd className="text-slate-400">{notice.cpvCodes.join(', ')}</dd>
+                  </div>
+                )}
+              </dl>
+
+              <a
+                href={notice.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                className="inline-block text-xs text-blue-400 hover:text-blue-300 font-medium"
+              >
+                {isUk ? 'View on Find a Tender →' : 'View full notice on TED →'}
+              </a>
             </div>
           )}
-
-          <div className="flex items-center gap-4 mt-3">
-            <a
-              href={notice.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={e => e.stopPropagation()}
-              className="text-xs text-blue-400 hover:text-blue-300 font-medium"
-            >
-              {notice.source === 'find-tender' ? 'View on Find a Tender →' : 'View full notice on TED →'}
-            </a>
-          </div>
         </div>
       </div>
     </div>

@@ -42,6 +42,7 @@ export default function SearchPage() {
   const [showModal,      setShowModal]      = useState(false)
   const [isDemoMode,     setIsDemoMode]     = useState(false)
   const [sessionId,      setSessionId]      = useState('')
+  const [showReasoning,  setShowReasoning]  = useState(false)
 
   const thinkingRef  = useRef('')
   const descRef      = useRef('')
@@ -219,75 +220,91 @@ export default function SearchPage() {
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
 
             {/* Left: agent status panel */}
-            <div className="lg:col-span-2 space-y-5">
-              <div>
-                <h2 className="text-lg font-semibold mb-1 flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full ${phase === 'running' ? 'bg-emerald-400 animate-pulse' : 'bg-blue-400'}`} />
-                  {phase === 'running' ? 'Scout Agent Running' : 'Analysis Complete'}
-                </h2>
-                <p className="text-sm text-slate-400">{status}</p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 text-center">
-                  <div className="text-2xl font-bold text-blue-400">{candidateCount}</div>
-                  <div className="text-xs text-slate-500 mt-0.5">candidates found</div>
-                </div>
-                <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 text-center">
-                  <div className="text-2xl font-bold text-emerald-400">{matches.length}</div>
-                  <div className="text-xs text-slate-500 mt-0.5">matches so far</div>
-                </div>
-              </div>
-
-              {thinkingText && <ThinkingFeed text={thinkingText} />}
-
-              {phase === 'done' && !error && (
-                <div className="space-y-3">
-                  {sessionId && (
-                    <Link
-                      href={`/sessions/${sessionId}`}
-                      className="w-full bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 hover:border-purple-500/60 text-purple-300 hover:text-purple-200 transition-all py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2"
-                    >
-                      🧠 View detailed evaluations →
-                    </Link>
+            <div className="lg:col-span-2">
+              <div className="lg:sticky lg:top-6 bg-slate-900/40 border border-slate-800 rounded-2xl p-5 space-y-5">
+                {/* Status + inline counters */}
+                <div>
+                  <h2 className="text-base font-semibold flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${phase === 'running' ? 'bg-emerald-400 animate-pulse' : 'bg-blue-400'}`} />
+                    {phase === 'running' ? 'Scout Agent running' : 'Analysis complete'}
+                  </h2>
+                  {phase === 'running' && status && (
+                    <p className="text-xs text-slate-500 mt-1.5">{status}</p>
                   )}
-                  <button
-                    onClick={() => exportReport(descRef.current, sorted)}
-                    className="w-full bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 hover:border-blue-500/60 text-blue-300 hover:text-blue-200 transition-all py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2"
-                  >
-                    ↓ Export PDF report
-                  </button>
+                  <p className="text-sm text-slate-500 mt-2.5">
+                    <span className="text-blue-400 font-semibold">{candidateCount}</span> candidates
+                    <span className="mx-2 text-slate-700">·</span>
+                    <span className="text-emerald-400 font-semibold">{matches.length}</span> matches
+                  </p>
+                </div>
+
+                {/* Actions */}
+                {phase === 'done' && !error && (
+                  <div className="space-y-3">
+                    {sessionId && (
+                      <Link
+                        href={`/sessions/${sessionId}`}
+                        className="w-full bg-blue-600 hover:bg-blue-500 transition-colors text-white py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
+                      >
+                        View detailed evaluations →
+                      </Link>
+                    )}
+                    <div className="flex items-center justify-center gap-5 text-xs">
+                      <button
+                        onClick={() => exportReport(descRef.current, sorted)}
+                        className="text-slate-400 hover:text-white transition-colors"
+                      >
+                        ↓ Export PDF
+                      </button>
+                      <span className="text-slate-700">·</span>
+                      <button onClick={reset} className="text-slate-400 hover:text-white transition-colors">
+                        ← New search
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {phase === 'done' && error && (
                   <button
                     onClick={reset}
                     className="w-full border border-slate-700 hover:border-slate-500 text-slate-400 hover:text-white transition-colors py-2.5 rounded-xl text-sm"
                   >
                     ← New search
                   </button>
-                </div>
-              )}
+                )}
 
-              {phase === 'done' && error && (
-                <button
-                  onClick={reset}
-                  className="w-full border border-slate-700 hover:border-slate-500 text-slate-400 hover:text-white transition-colors py-2.5 rounded-xl text-sm"
-                >
-                  ← New search
-                </button>
-              )}
+                {/* AI reasoning — open while running, disclosure once done */}
+                {thinkingText && phase === 'running' && <ThinkingFeed text={thinkingText} />}
+                {thinkingText && phase === 'done' && (
+                  <div className="border-t border-slate-800 pt-4">
+                    <button
+                      onClick={() => setShowReasoning(s => !s)}
+                      className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                    >
+                      {showReasoning ? '▾ Hide AI reasoning' : '▸ Show AI reasoning'}
+                    </button>
+                    {showReasoning && (
+                      <div className="mt-3">
+                        <ThinkingFeed text={thinkingText} />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Right: results */}
             <div className="lg:col-span-3">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-baseline justify-between mb-4">
                 <h2 className="text-lg font-semibold">
                   {phase === 'done' && !error
-                    ? `${totalDone} relevant tender${totalDone !== 1 ? 's' : ''} found`
+                    ? `${totalDone} relevant tender${totalDone !== 1 ? 's' : ''}`
                     : phase === 'running'
                     ? 'Matches appearing…'
                     : 'Search failed'}
                 </h2>
-                {matches.length > 0 && (
-                  <span className="text-xs text-slate-500">click any card for details</span>
+                {phase === 'done' && !error && matches.length > 0 && (
+                  <span className="text-xs text-slate-600">sorted by relevance</span>
                 )}
               </div>
 

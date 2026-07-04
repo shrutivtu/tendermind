@@ -1,13 +1,13 @@
 import type { MatchedNotice } from '@/lib/scout-stream'
 
-// ISO 3166-1 alpha-3 → alpha-2 (all EU members) — kept here so lib/ has no
+// ISO 3166-1 alpha-3 → alpha-2 (all EU members + UK) — kept here so lib/ has no
 // dependency on app/ code.
 const ALPHA3_TO_2: Record<string, string> = {
   ESP: 'ES', POL: 'PL', CZE: 'CZ', DEU: 'DE', FRA: 'FR', IRL: 'IE',
   HRV: 'HR', ROU: 'RO', ITA: 'IT', NLD: 'NL', BEL: 'BE', SWE: 'SE',
   PRT: 'PT', GRC: 'GR', MLT: 'MT', HUN: 'HU', SVK: 'SK', SVN: 'SI',
   FIN: 'FI', DNK: 'DK', AUT: 'AT', BGR: 'BG', CYP: 'CY', EST: 'EE',
-  LVA: 'LV', LTU: 'LT', LUX: 'LU',
+  LVA: 'LV', LTU: 'LT', LUX: 'LU', GBR: 'GB',
 }
 
 // ─── Display helpers ──────────────────────────────────────────────────────────

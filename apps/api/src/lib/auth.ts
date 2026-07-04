@@ -12,6 +12,14 @@ const ANON_TTL_SECONDS = 60 * 60 * 24 * 90
 const ANON_SEARCH_LIMIT = Number(process.env.ANON_SEARCH_LIMIT ?? 2)
 const USER_MONTHLY_SEARCH_LIMIT = Number(process.env.USER_MONTHLY_SEARCH_LIMIT ?? 10)
 
+// Comma-separated list of account emails exempt from search limits
+const UNLIMITED_SEARCH_EMAILS = new Set(
+  (process.env.UNLIMITED_SEARCH_EMAILS ?? '')
+    .split(',')
+    .map(e => e.trim().toLowerCase())
+    .filter(Boolean)
+)
+
 export interface AuthUser {
   id: string
   email: string
@@ -221,6 +229,9 @@ export async function enforceSearchLimit(
   ctx: RequestContext
 ): Promise<{ allowed: true; remaining: number } | { allowed: false; remaining: 0; limit: number; window: string }> {
   if (ctx.user) {
+    if (UNLIMITED_SEARCH_EMAILS.has(ctx.user.email.toLowerCase())) {
+      return { allowed: true, remaining: Number.MAX_SAFE_INTEGER }
+    }
     const rows = await sql<{ count: number }[]>`
       SELECT COUNT(*)::int AS count
       FROM usage_events
