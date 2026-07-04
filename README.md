@@ -2,13 +2,13 @@
 
 [![CI](https://github.com/shrutivtu/tendermind/actions/workflows/ci.yml/badge.svg)](https://github.com/shrutivtu/tendermind/actions/workflows/ci.yml)
 
-AI-powered EU procurement intelligence for small and medium enterprises. TenderMind monitors the EU's official tender database (TED), understands what your company does, and surfaces relevant contract opportunities — ranked by fit and evaluated for bid/no-bid decisions using a two-agent AI pipeline.
+AI-powered EU and UK procurement intelligence for small and medium enterprises. TenderMind monitors the EU's official tender database (TED) and the UK's Find a Tender service, understands what your company does, and surfaces relevant contract opportunities — ranked by fit and evaluated for bid/no-bid decisions using a two-agent AI pipeline.
 
 ---
 
 ## What it does
 
-EU public procurement is a €2 trillion/year market, but navigating it is painful. TED publishes thousands of notices daily across 27 countries in 24 languages. TenderMind makes it searchable for SMEs.
+EU and UK public procurement is a multi-trillion euro/year market, but navigating it is painful. TED publishes thousands of notices daily across 27 EU countries in 24 languages; Find a Tender covers all UK public contracts post-Brexit. TenderMind makes both searchable for SMEs in one place.
 
 1. **You describe your company** — one paragraph about what you do
 2. **Scout agent searches** — streams live results ranked by semantic similarity to your description
@@ -67,22 +67,26 @@ EU public procurement is a €2 trillion/year market, but navigating it is painf
 ### Data pipeline
 
 ```
-TED API (REST v3)
-     │
-     ▼
-Ingestion Worker (runs every 6h)
-     │
-     ├─► Normalize: title, description, CPV codes, deadline
-     │              currency → EUR via ECB daily rates
-     │
-     ├─► Upsert into notices table (PostgreSQL)
-     │
-     └─► Embed: title + description + CPV labels
+TED API (REST v3)          Find a Tender API (OCDS)
+     │                              │
+     ▼                              ▼
+EU Ingestion Worker         UK Ingestion Worker   (both run every 6h)
+     │                              │
+     ├─► Normalize notices          ├─► Normalize OCDS releases
+     │   currency → EUR (ECB)       │   GBP → EUR (ECB, inverted)
+     │   source = 'ted'             │   source = 'find-tender'
+     │                              │   id prefix = 'ft-'
+     └──────────────┬───────────────┘
+                    ▼
+         Upsert into notices table (PostgreSQL)
+                    │
+                    ▼
+         Embed: title + description + CPV labels
               → OpenAI text-embedding-3-small
               → store in notice_embeddings (pgvector)
 ```
 
-**Currency handling**: 7 non-eurozone EU currencies (PLN, CZK, SEK, RON, HUF, DKK, BGN) are converted to EUR at ingestion time using the ECB's daily reference rate XML feed. BGN is hardcoded at 1.9558 (fixed peg since 1999). Original values are preserved in `original_value`.
+**Currency handling**: EU — 7 non-eurozone currencies (PLN, CZK, SEK, RON, HUF, DKK, BGN) converted via ECB daily reference rate XML. BGN hardcoded at 1.9558 (fixed peg). UK — GBP→EUR by inverting the ECB EUR-base rate (ECB publishes EUR/GBP; we need GBP/EUR). Original values preserved in `original_value`.
 
 **CPV codes**: The EU's Common Procurement Vocabulary — 9,454 standardised category codes. We seed a curated ~350-code subset covering the realistic SME universe (IT, software, engineering, health, professional services, R&D, construction) into PostgreSQL, then use labels to enrich embeddings.
 
@@ -99,7 +103,7 @@ Ingestion Worker (runs every 6h)
 | AI — embeddings | OpenAI `text-embedding-3-small` (1536 dims) |
 | AI — agents | Anthropic Claude (`claude-opus-4-5`), streaming + tool use |
 | Monorepo | Turborepo |
-| Data source | TED REST API v3 (`api.ted.europa.eu`) |
+| Data sources | TED REST API v3 (`api.ted.europa.eu`), UK Find a Tender OCDS API |
 | FX rates | ECB daily reference XML |
 
 ---
@@ -128,13 +132,21 @@ tendermind/
 │           └── dashboard/      # Session history
 │
 └── workers/
-    ├── ingestion/              # TED → PostgreSQL pipeline
+    ├── ingestion/              # EU TED → PostgreSQL pipeline
     │   └── src/
     │       ├── ted-client.ts   # TED REST API v3 client
     │       ├── normalizer.ts   # Notice normalisation + FX conversion
     │       ├── embedder.ts     # OpenAI batch embeddings
     │       ├── fx-rates.ts     # ECB rate fetcher + toEur()
     │       └── fix-currencies.ts # One-time backfill script
+    │
+    ├── uk-ingestion/           # UK Find a Tender → PostgreSQL pipeline
+    │   └── src/
+    │       ├── find-tender-client.ts  # OCDS API client (auto-retry on 429)
+    │       ├── normalizer.ts          # OCDS → NormalizedNotice, GBP→EUR
+    │       └── index.ts               # Cursor pagination, embed + upsert
+    │
+    ├── award-sync/             # Syncs contract award data
     │
     └── cpv-loader/             # Seeds CPV taxonomy into DB
         └── src/
@@ -181,6 +193,8 @@ In your Supabase SQL editor, run in order:
 apps/api/src/db/migrations/001_initial.sql
 apps/api/src/db/migrations/002_sessions_evaluations.sql
 apps/api/src/db/migrations/003_original_value.sql
+apps/api/src/db/migrations/004_award_sync.sql
+apps/api/src/db/migrations/005_source_column.sql
 ```
 
 Enable pgvector extension first:
@@ -195,14 +209,19 @@ cd workers/cpv-loader
 npx tsx --env-file=../../.env src/index.ts
 ```
 
-### 5. Run the ingestion worker
+### 5. Run the ingestion workers
 
 ```bash
+# EU TED notices
 cd workers/ingestion
+npx tsx --env-file=../../.env src/index.ts
+
+# UK Find a Tender notices
+cd workers/uk-ingestion
 npx tsx --env-file=../../.env src/index.ts
 ```
 
-This fetches the last 2 days of TED notices, normalises them, converts currencies, generates embeddings, and stores everything in Supabase. ~3,500 notices takes about 5 minutes.
+Each worker fetches the last 2 days of notices, normalises them, converts currencies to EUR, generates embeddings, and upserts into Supabase. EU ingestion (~3,500 notices) takes about 5 minutes.
 
 ### 6. Start the app
 
@@ -221,7 +240,7 @@ npm run dev
 | Table | Purpose |
 |---|---|
 | `cpv_codes` | CPV taxonomy — codes, labels, hierarchy |
-| `notices` | Normalised TED tender notices |
+| `notices` | Normalised tender notices (EU + UK); `source` column distinguishes origin |
 | `notice_embeddings` | pgvector embeddings (1536 dims) |
 | `search_sessions` | One row per Scout+Analyst run |
 | `tender_evaluations` | Analyst's per-tender recommendation |
