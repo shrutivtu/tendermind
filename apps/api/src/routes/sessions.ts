@@ -6,6 +6,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import postgres from 'postgres'
 import { getRequestContext, requireAuth } from '../lib/auth.js'
+import { sweepStaleSessions } from '../lib/stale-sessions.js'
 
 export const sessionsRoute: FastifyPluginAsync = async (app) => {
   const sql = postgres(process.env.DATABASE_URL!, { ssl: 'require' })
@@ -14,6 +15,9 @@ export const sessionsRoute: FastifyPluginAsync = async (app) => {
   app.get('/api/sessions', async (req, reply) => {
     const user = await requireAuth(req, reply, sql)
     if (!user) return
+
+    // Self-heal sessions whose run died mid-flight
+    await sweepStaleSessions(sql)
 
     const rows = await sql`
       SELECT

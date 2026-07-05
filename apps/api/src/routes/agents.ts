@@ -28,8 +28,23 @@ export const agentsRoute: FastifyPluginAsync = async (app) => {
     }
 
     const ctx = await getRequestContext(req, reply, sql)
+
+    // Log every search request so live traffic is visible in Render logs —
+    // who searched (or 'anonymous' + session), from where, and for what.
+    const forwarded = req.headers['x-forwarded-for']
+    const clientIp =
+      (Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(',')[0]?.trim()) ?? req.ip
+    const requestLog = {
+      description: body.data.description.slice(0, 500),
+      country: body.data.country ?? null,
+      user: ctx.user?.email ?? 'anonymous',
+      anonSession: ctx.user ? undefined : ctx.anonymousSessionId,
+      ip: clientIp,
+    }
+
     const limit = await enforceSearchLimit(req, sql, ctx)
     if (!limit.allowed) {
+      req.log.warn({ scout: requestLog, limit: limit.limit, window: limit.window }, 'scout search rate-limited')
       return reply.status(429).send({
         error: ctx.user
           ? `You have used your ${limit.limit} AI searches for this ${limit.window}.`
@@ -39,6 +54,7 @@ export const agentsRoute: FastifyPluginAsync = async (app) => {
         window: limit.window,
       })
     }
+    req.log.info({ scout: requestLog }, 'scout search requested')
     await recordSearchUsage(req, sql, ctx)
 
     const origin = (req.headers.origin as string) ?? 'http://localhost:3000'

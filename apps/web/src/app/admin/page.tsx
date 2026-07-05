@@ -222,6 +222,7 @@ export default function AdminPage() {
                         <td className="px-4 py-3">
                           <Link
                             href={`/sessions/${s.id}`}
+                            title={s.description}
                             className="text-xs text-slate-400 hover:text-blue-300 transition-colors line-clamp-1"
                           >
                             {s.description}

@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import postgres from 'postgres'
 import { getAuthUser } from '../lib/auth.js'
+import { sweepStaleSessions } from '../lib/stale-sessions.js'
 
 // Comma-separated list of account emails allowed to access /api/admin/*
 const ADMIN_EMAILS = new Set(
@@ -18,6 +19,9 @@ export const adminRoute: FastifyPluginAsync = async (app) => {
     if (!user || !ADMIN_EMAILS.has(user.email.toLowerCase())) {
       return reply.status(403).send({ error: 'Admin access required' })
     }
+
+    // Self-heal sessions whose run died mid-flight before reporting stats
+    await sweepStaleSessions(sql)
 
     const [notices, sessionAgg, recentSessions] = await Promise.all([
       // Per-source notice counts + data freshness (updated_at is bumped on
@@ -48,7 +52,7 @@ export const adminRoute: FastifyPluginAsync = async (app) => {
           id,
           status,
           match_count                    AS "matchCount",
-          LEFT(company_description, 160) AS description,
+          LEFT(company_description, 500) AS description,
           created_at                     AS "createdAt",
           completed_at                   AS "completedAt"
         FROM search_sessions

@@ -258,12 +258,15 @@ async function saveScoutResults(
   matches: MatchedNotice[]
 ): Promise<void> {
   const topScore = matches.length > 0 ? Math.max(...matches.map(m => m.score)) : null
+  // The Analyst only runs when there are matches — a 0-match session is done.
+  const status = matches.length > 0 ? 'analyst_running' : 'complete'
   await sql`
     UPDATE search_sessions SET
-      status        = 'analyst_running',
+      status        = ${status},
       scout_matches = ${sql.json(matches as never)},
       match_count   = ${matches.length},
-      top_score     = ${topScore}
+      top_score     = ${topScore},
+      completed_at  = ${matches.length > 0 ? null : sql`NOW()`}
     WHERE id = ${sessionId}
   `
 }
