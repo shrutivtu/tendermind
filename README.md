@@ -132,19 +132,17 @@ tendermind/
 │           └── dashboard/      # Session history
 │
 └── workers/
-    ├── ingestion/              # EU TED → PostgreSQL pipeline
+    ├── ingestion/              # EU + UK tenders → PostgreSQL pipeline
     │   └── src/
-    │       ├── ted-client.ts   # TED REST API v3 client
-    │       ├── normalizer.ts   # Notice normalisation + FX conversion
+    │       ├── index.ts        # Entry — SOURCE=ted|find-tender|all
+    │       ├── pipeline.ts     # Shared upsert + embedding pipeline
+    │       ├── types.ts        # NormalizedNotice + SourceAdapter interface
     │       ├── embedder.ts     # OpenAI batch embeddings
-    │       ├── fx-rates.ts     # ECB rate fetcher + toEur()
-    │       └── fix-currencies.ts # One-time backfill script
-    │
-    ├── uk-ingestion/           # UK Find a Tender → PostgreSQL pipeline
-    │   └── src/
-    │       ├── find-tender-client.ts  # OCDS API client (auto-retry on 429)
-    │       ├── normalizer.ts          # OCDS → NormalizedNotice, GBP→EUR
-    │       └── index.ts               # Cursor pagination, embed + upsert
+    │       ├── fx-rates.ts     # ECB rate fetcher + toEur() (incl. GBP)
+    │       ├── fix-currencies.ts # One-time backfill script
+    │       └── sources/
+    │           ├── ted/            # EU: TED REST v3 client + normalizer
+    │           └── find-tender/    # UK: OCDS client (429 retry) + normalizer
     │
     ├── award-sync/             # Syncs contract award data
     │
@@ -209,19 +207,20 @@ cd workers/cpv-loader
 npx tsx --env-file=../../.env src/index.ts
 ```
 
-### 5. Run the ingestion workers
+### 5. Run the ingestion worker
 
 ```bash
-# EU TED notices
 cd workers/ingestion
+
+# Both sources (EU TED + UK Find a Tender)
 npx tsx --env-file=../../.env src/index.ts
 
-# UK Find a Tender notices
-cd workers/uk-ingestion
-npx tsx --env-file=../../.env src/index.ts
+# Or one source at a time
+SOURCE=ted npx tsx --env-file=../../.env src/index.ts
+SOURCE=find-tender npx tsx --env-file=../../.env src/index.ts
 ```
 
-Each worker fetches the last 2 days of notices, normalises them, converts currencies to EUR, generates embeddings, and upserts into Supabase. EU ingestion (~3,500 notices) takes about 5 minutes.
+The worker fetches the last 2 days of notices per source (`DAYS_BACK` to override), normalises them, converts currencies to EUR at ECB rates, generates embeddings, and upserts into Supabase. EU ingestion (~3,500 notices) takes about 5 minutes. In production this runs every 6 hours via GitHub Actions (`.github/workflows/ingest.yml`).
 
 ### 6. Start the app
 

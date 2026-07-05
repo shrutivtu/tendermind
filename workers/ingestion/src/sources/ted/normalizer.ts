@@ -8,28 +8,9 @@
 //   their national currency). Values are converted to EUR at ingestion time
 //   using ECB daily reference rates.
 
-import type { TEDNoticeRaw } from './ted-client.js'
-import { currencyForCountry, toEur, type FxRates } from './fx-rates.js'
-
-export interface NormalizedNotice {
-  id: string
-  type: string
-  title: string
-  titleOriginal: string | null
-  description: string | null
-  language: string
-  country: string
-  buyerName: string | null
-  buyerCountry: string | null
-  cpvCodes: string[]
-  estimatedValue: number | null     // always EUR (converted)
-  originalValue: number | null      // raw value in original currency
-  currency: string | null           // original currency code e.g. "PLN", "EUR"
-  deadline: Date | null
-  publicationDate: Date
-  url: string
-  rawData: TEDNoticeRaw
-}
+import type { TEDNoticeRaw } from './client.js'
+import { currencyForCountry, toEur, type FxRates } from '../../fx-rates.js'
+import type { NormalizedNotice } from '../../types.js'
 
 // Pick preferred language from { eng: "...", deu: "..." }
 function pickLang(

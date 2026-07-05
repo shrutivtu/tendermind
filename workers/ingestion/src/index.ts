@@ -1,17 +1,19 @@
 // Ingestion Worker
-// Pulls recent EU tender notices from TED REST API v3,
-// normalises them, generates embeddings, and upserts into Supabase.
+// Pulls recent tender notices from all configured sources (EU TED, UK Find a
+// Tender), normalises them, generates embeddings, and upserts into Supabase.
 // Run: every 6 hours via cron (or manually for first load)
+//
+// Env:
+//   SOURCE     — 'ted' | 'find-tender' | 'all' (default 'all')
+//   DAYS_BACK  — lookback window in days (default 2)
+//   MAX_PAGES  — stop each source after N pages; smoke-test knob (default off)
 
 import postgres from 'postgres'
-import {
-  searchNotices,
-  buildRecentNoticesQuery,
-  NOTICE_FIELDS,
-} from './ted-client.js'
-import { normalizeNotice } from './normalizer.js'
-import { buildEmbedText, batchEmbed } from './embedder.js'
-import { fetchECBRates, type FxRates } from './fx-rates.js'
+import { fetchECBRates } from './fx-rates.js'
+import { getCPVLabels, runSource } from './pipeline.js'
+import { tedSource } from './sources/ted/index.js'
+import { findTenderSource } from './sources/find-tender/index.js'
+import type { SourceAdapter } from './types.js'
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
 
@@ -21,152 +23,75 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 if (!DATABASE_URL) throw new Error('DATABASE_URL is required')
 if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is required')
 
-const sql = postgres(DATABASE_URL, { ssl: 'require' })
-
 const DAYS_BACK = Number(process.env.DAYS_BACK ?? 2)
+const MAX_PAGES = Number(process.env.MAX_PAGES ?? 0)
 
-// ─── Fetch CPV labels for enrichment ─────────────────────────────────────────
-
-async function getCPVLabels(): Promise<Map<string, string>> {
-  const rows = await sql<{ code: string; label: string }[]>`
-    SELECT code, label FROM cpv_codes
-  `
-  return new Map(rows.map(r => [r.code, r.label]))
+const ADAPTERS: Record<string, SourceAdapter> = {
+  'ted': tedSource,
+  'find-tender': findTenderSource,
 }
 
-// ─── Upsert notices ───────────────────────────────────────────────────────────
-
-async function upsertNotices(notices: ReturnType<typeof normalizeNotice>[]): Promise<void> {
-  const valid = notices.filter(Boolean) as NonNullable<ReturnType<typeof normalizeNotice>>[]
-  if (valid.length === 0) return
-
-  await sql`
-    INSERT INTO notices (
-      id, type, title, title_original, description, language,
-      country, buyer_name, buyer_country, cpv_codes,
-      estimated_value, original_value, currency,
-      deadline, publication_date, url, raw_data, source
-    )
-    VALUES ${sql(valid.map(n => [
-      n.id, n.type, n.title, n.titleOriginal, n.description, n.language,
-      n.country, n.buyerName, n.buyerCountry, n.cpvCodes,
-      n.estimatedValue, n.originalValue, n.currency,
-      n.deadline, n.publicationDate, n.url,
-      JSON.stringify(n.rawData),
-      'ted',
-    ]))}
-    ON CONFLICT (id) DO UPDATE SET
-      title           = EXCLUDED.title,
-      description     = EXCLUDED.description,
-      cpv_codes       = EXCLUDED.cpv_codes,
-      estimated_value = EXCLUDED.estimated_value,
-      original_value  = EXCLUDED.original_value,
-      currency        = EXCLUDED.currency,
-      deadline        = EXCLUDED.deadline,
-      source          = EXCLUDED.source,
-      updated_at      = now()
-  `
-}
-
-// ─── Upsert embeddings ────────────────────────────────────────────────────────
-
-async function upsertEmbeddings(
-  results: Awaited<ReturnType<typeof batchEmbed>>
-): Promise<void> {
-  if (results.length === 0) return
-
-  for (const r of results) {
-    const vectorStr = `[${r.embedding.join(',')}]`
-    await sql`
-      INSERT INTO notice_embeddings (notice_id, embedding, embedded_text)
-      VALUES (${r.noticeId}, ${vectorStr}::vector, ${r.embeddedText})
-      ON CONFLICT (notice_id) DO UPDATE SET
-        embedding     = EXCLUDED.embedding,
-        embedded_text = EXCLUDED.embedded_text,
-        created_at    = now()
-    `
+function selectAdapters(): SourceAdapter[] {
+  const requested = process.env.SOURCE ?? 'all'
+  if (requested === 'all') return Object.values(ADAPTERS)
+  const adapter = ADAPTERS[requested]
+  if (!adapter) {
+    throw new Error(`Unknown SOURCE '${requested}' — use ${[...Object.keys(ADAPTERS), 'all'].join(' | ')}`)
   }
+  return [adapter]
 }
 
-// ─── Main ────────────────────────────────────────────────────────────────────
+// ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
+  const adapters = selectAdapters()
+  const sql = postgres(DATABASE_URL!, { ssl: 'require' })
+
   console.log('=== Ingestion Worker ===')
+  console.log(`Sources: ${adapters.map(a => a.label).join(', ')}`)
   console.log(`Fetching notices from last ${DAYS_BACK} days...\n`)
   const start = Date.now()
 
-  // 1. Fetch ECB exchange rates once — reused for all notices this run
-  const fxRates: FxRates = await fetchECBRates()
-  console.log()
+  // Shared context: ECB rates + CPV labels fetched once for all sources
+  const fxRates = await fetchECBRates()
+  const cpvLabels = await getCPVLabels(sql)
+  console.log(`✓ Loaded ${cpvLabels.size} CPV labels\n`)
 
-  // 2. Load CPV labels
-  const cpvLabels = await getCPVLabels()
-  console.log(`✓ Loaded ${cpvLabels.size} CPV labels`)
+  const failures: string[] = []
 
-  // 3. Fetch from TED API
-  const query = buildRecentNoticesQuery(DAYS_BACK)
-  console.log(`  Query: ${query}`)
-
-  let page = 1
-  let totalFetched = 0
-  let totalUpserted = 0
-
-  while (true) {
-    process.stdout.write(`\r  Fetching page ${page}...`)
-
-    const response = await searchNotices({
-      query,
-      fields: NOTICE_FIELDS,
-      page,
-      limit: 100,
-    })
-
-    if (response.notices.length === 0) break
-
-    // 4. Normalize — pass FX rates so values are converted to EUR
-    const normalized = response.notices
-      .map(r => normalizeNotice(r, fxRates))
-      .filter(Boolean) as NonNullable<ReturnType<typeof normalizeNotice>>[]
-
-    // 5. Upsert notices
-    await upsertNotices(normalized)
-
-    // 6. Build embed inputs
-    const embedInputs = normalized.map(n => ({
-      noticeId: n.id,
-      text: buildEmbedText(
-        n.title,
-        n.description,
-        n.cpvCodes.map(code => cpvLabels.get(code) ?? code)
-      ),
-    }))
-
-    // 7. Generate + upsert embeddings
-    const embedResults = await batchEmbed(embedInputs)
-    await upsertEmbeddings(embedResults)
-
-    totalFetched += response.notices.length
-    totalUpserted += normalized.length
-
-    const totalPages = Math.ceil(response.totalNoticeCount / 100)
-    process.stdout.write(
-      `\r  ✓ Page ${page}/${totalPages} — ${totalFetched} notices fetched`
-    )
-
-    if (page >= totalPages) break
-    page++
-
-    await new Promise(r => setTimeout(r, 300))
+  for (const adapter of adapters) {
+    console.log(`── ${adapter.label} ──`)
+    try {
+      const stats = await runSource(
+        sql,
+        adapter,
+        { daysBack: DAYS_BACK, fxRates, maxPages: MAX_PAGES },
+        cpvLabels
+      )
+      console.log(`  ✓ ${stats.upserted} notices upserted across ${stats.batches} page(s)\n`)
+    } catch (err) {
+      // One broken source shouldn't stop the others from staying fresh
+      console.error(`  ❌ ${adapter.label} failed: ${err instanceof Error ? err.message : err}\n`)
+      failures.push(adapter.name)
+    }
   }
 
   const elapsed = ((Date.now() - start) / 1000).toFixed(1)
-  const [{ count }] = await sql<[{ count: string }]>`SELECT COUNT(*) as count FROM notices`
+  const counts = await sql<{ source: string; count: string }[]>`
+    SELECT source, COUNT(*) as count FROM notices GROUP BY source ORDER BY source
+  `
 
-  console.log(`\n\n✅ Done in ${elapsed}s`)
-  console.log(`   Upserted: ${totalUpserted} notices`)
-  console.log(`   Total in DB: ${count} notices`)
+  console.log(`${failures.length === 0 ? '✅' : '⚠️ '} Done in ${elapsed}s`)
+  for (const c of counts) {
+    console.log(`   ${c.source}: ${c.count} notices in DB`)
+  }
 
   await sql.end()
+
+  if (failures.length > 0) {
+    console.error(`\n❌ Failed sources: ${failures.join(', ')}`)
+    process.exit(1)
+  }
 }
 
 main().catch(err => {

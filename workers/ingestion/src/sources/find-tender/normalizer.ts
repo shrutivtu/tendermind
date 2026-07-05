@@ -1,33 +1,11 @@
 // Normalizer
 // Converts a raw Find a Tender OCDS release into our clean Notice schema.
-// All values are in GBP — we convert to EUR using the ECB FX rate for GBP.
+// Values are in GBP — converted to EUR via the shared ECB rates (fx-rates.ts;
+// the ECB daily reference XML includes GBP).
 
-import type { FTRelease } from './find-tender-client.js'
-
-export interface FTNormalizedNotice {
-  id: string
-  type: string
-  title: string
-  titleOriginal: null           // UK notices are always in English
-  description: string | null
-  language: string
-  country: string               // ISO alpha-3 "GBR"
-  buyerName: string | null
-  buyerCountry: string          // "GBR"
-  cpvCodes: string[]
-  estimatedValue: number | null // converted to EUR
-  originalValue: number | null  // GBP
-  currency: string              // "GBP"
-  deadline: Date | null
-  publicationDate: Date
-  url: string
-  rawData: FTRelease
-}
-
-// Convert GBP → EUR using the provided rate (how many EUR per 1 GBP)
-function gbpToEur(gbp: number, gbpRate: number): number {
-  return Math.round(gbp * gbpRate)
-}
+import type { FTRelease } from './client.js'
+import { toEur, type FxRates } from '../../fx-rates.js'
+import type { NormalizedNotice } from '../../types.js'
 
 // Extract best value from release: prefer top-level tender.value, fall back to sum of lots
 function extractValue(release: FTRelease): { amount: number; currency: string } | null {
@@ -96,8 +74,8 @@ function mapType(tags: string[]): string {
 
 export function normalizeRelease(
   release: FTRelease,
-  gbpToEurRate: number   // EUR per 1 GBP
-): FTNormalizedNotice | null {
+  fxRates: FxRates
+): NormalizedNotice | null {
   const id = `ft-${release.id}`   // prefix to avoid collision with TED IDs
   if (!release.date) return null
 
@@ -111,7 +89,7 @@ export function normalizeRelease(
   const originalValue = val?.amount ?? null
   const currency = val?.currency ?? 'GBP'
   const estimatedValue = originalValue != null
-    ? gbpToEur(originalValue, gbpToEurRate)
+    ? Math.round(toEur(originalValue, currency, fxRates))
     : null
 
   const { name: buyerName } = extractBuyer(release)

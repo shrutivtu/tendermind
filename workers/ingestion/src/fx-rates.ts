@@ -42,6 +42,7 @@ const FALLBACK_RATES: FxRates = {
   HUF: 395.0,
   DKK: 7.46,
   BGN: 1.9558,  // fixed peg since 1999
+  GBP: 0.85,    // UK Find a Tender values (ECB publishes GBP in the same feed)
 }
 
 export async function fetchECBRates(): Promise<FxRates> {

@@ -1,0 +1,56 @@
+name: Ingest tenders
+
+# Runs both ingestion workers every 6 hours on GitHub-hosted runners.
+# EU (TED) first, then UK (Find a Tender) — sequential so they never
+# compete for OpenAI rate limits or DB connections.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   DATABASE_URL     — Supabase Session Pooler URL (same as the API on Render)
+#   OPENAI_API_KEY   — for embeddings
+#
+# Notes:
+#   - Schedules run in UTC and are best-effort: a run may start a few
+#     minutes late under GitHub load. Fine for a 6-hour cadence.
+#   - GitHub disables schedules after 60 days without repo activity
+#     (you get an email with a one-click re-enable).
+#   - Scheduled workflows only run from the default branch.
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'   # 00:00, 06:00, 12:00, 18:00 UTC
+  workflow_dispatch:         # manual "Run workflow" button for testing
+
+concurrency:
+  group: ingest
+  cancel-in-progress: false  # never kill a half-finished ingestion run
+
+jobs:
+  ingest:
+    name: EU + UK ingestion
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # SOURCE=all runs EU (TED) then UK (Find a Tender) sequentially.
+      # The worker isolates per-source failures internally: one broken
+      # source doesn't stop the other, and the run exits non-zero if
+      # any source failed.
+      - name: Ingest EU + UK
+        run: npx tsx workers/ingestion/src/index.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SOURCE: all
+          DAYS_BACK: '2'
