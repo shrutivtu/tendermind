@@ -32,12 +32,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
@@ -54,3 +54,6 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           SOURCE: all
           DAYS_BACK: '2'
+          # Find a Tender's cert chains to ISRG Root YR, which trust stores
+          # don't ship yet — see workers/ingestion/certs/isrg-root-yr.pem
+          NODE_EXTRA_CA_CERTS: workers/ingestion/certs/isrg-root-yr.pem

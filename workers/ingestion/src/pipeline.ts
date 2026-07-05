@@ -110,9 +110,13 @@ export async function runSource(
 
     batches++
     upserted += batch.length
-    process.stdout.write(`\r  [${adapter.name}] page ${batches} — ${upserted} notices processed`)
+    // \r keeps a single updating line in a terminal, but garbles CI logs —
+    // GitHub Actions gets one clean line per page instead.
+    const progress = `  [${adapter.name}] page ${batches} — ${upserted} notices processed`
+    if (process.stdout.isTTY) process.stdout.write(`\r${progress}`)
+    else console.log(progress)
   }
 
-  if (batches > 0) process.stdout.write('\n')
+  if (batches > 0 && process.stdout.isTTY) process.stdout.write('\n')
   return { batches, upserted }
 }

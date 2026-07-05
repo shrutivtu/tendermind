@@ -3,6 +3,8 @@
 // No API key required for basic search (public endpoint)
 // NOTE: Actual response shapes verified from live API — differ from Swagger docs.
 
+import { withRetry } from '../../retry.js'
+
 const TED_API_BASE = 'https://api.ted.europa.eu/v3'
 
 // ─── Types (verified against live API response) ────────────────────────────────
@@ -49,21 +51,23 @@ export async function searchNotices(params: TEDSearchParams): Promise<TEDSearchR
     limit: params.limit ?? 50,
   }
 
-  const response = await fetch(`${TED_API_BASE}/notices/search`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    },
-    body: JSON.stringify(body),
+  return withRetry('TED search', async () => {
+    const response = await fetch(`${TED_API_BASE}/notices/search`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
+
+    if (!response.ok) {
+      const text = await response.text()
+      throw new Error(`TED API error ${response.status}: ${text}`)
+    }
+
+    return response.json() as Promise<TEDSearchResponse>
   })
-
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`TED API error ${response.status}: ${text}`)
-  }
-
-  return response.json()
 }
 
 // ─── Query builders ───────────────────────────────────────────────────────────

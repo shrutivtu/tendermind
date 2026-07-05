@@ -3,6 +3,8 @@
 // Public read endpoint — no API key required.
 // Note: the eSender submission API requires a CDP-Api-Key, but OCDS data is open.
 
+import { withRetry } from '../../retry.js'
+
 const FT_API_BASE = 'https://www.find-tender.service.gov.uk/api/1.0'
 
 // ─── Types (from OCDS release package schema) ─────────────────────────────────
@@ -92,23 +94,25 @@ export async function fetchReleasePackage(params: FTSearchParams = {}): Promise<
   if (params.limit != null) url.searchParams.set('limit', String(params.limit))
   if (params.cursor)       url.searchParams.set('cursor', params.cursor)
 
-  const response = await fetch(url.toString(), {
-    headers: { Accept: 'application/json' },
+  return withRetry('Find a Tender fetch', async () => {
+    const response = await fetch(url.toString(), {
+      headers: { Accept: 'application/json' },
+    })
+
+    if (response.status === 429) {
+      const retryAfter = Number(response.headers.get('Retry-After') ?? 10)
+      console.warn(`  ⚠️  Rate limited — waiting ${retryAfter}s`)
+      await new Promise(r => setTimeout(r, retryAfter * 1000))
+      return fetchReleasePackage(params)
+    }
+
+    if (!response.ok) {
+      const text = await response.text()
+      throw new Error(`Find a Tender API error ${response.status}: ${text}`)
+    }
+
+    return response.json() as Promise<FTReleasePackage>
   })
-
-  if (response.status === 429) {
-    const retryAfter = Number(response.headers.get('Retry-After') ?? 10)
-    console.warn(`  ⚠️  Rate limited — waiting ${retryAfter}s`)
-    await new Promise(r => setTimeout(r, retryAfter * 1000))
-    return fetchReleasePackage(params)
-  }
-
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`Find a Tender API error ${response.status}: ${text}`)
-  }
-
-  return response.json() as Promise<FTReleasePackage>
 }
 
 // ─── Query helpers ────────────────────────────────────────────────────────────

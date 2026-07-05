@@ -4,6 +4,7 @@
 // These vectors power semantic search in the Scout agent.
 
 import OpenAI from 'openai'
+import { withRetry } from './retry.js'
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
@@ -43,10 +44,14 @@ export async function batchEmbed(inputs: EmbedInput[]): Promise<EmbedResult[]> {
   for (let i = 0; i < inputs.length; i += MAX_BATCH) {
     const batch = inputs.slice(i, i + MAX_BATCH)
 
-    const response = await openai.embeddings.create({
-      model: EMBEDDING_MODEL,
-      input: batch.map(b => b.text),
-    })
+    // The SDK retries connection errors, but not mid-body resets
+    // ("Invalid response body ... ECONNRESET") — so retry explicitly.
+    const response = await withRetry('OpenAI embeddings', () =>
+      openai.embeddings.create({
+        model: EMBEDDING_MODEL,
+        input: batch.map(b => b.text),
+      })
+    )
 
     for (let j = 0; j < batch.length; j++) {
       results.push({

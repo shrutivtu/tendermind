@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "tsx --env-file=../../.env src/index.ts",
+    "start": "NODE_EXTRA_CA_CERTS=certs/isrg-root-yr.pem tsx --env-file=../../.env src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
