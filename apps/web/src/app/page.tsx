@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { UserMenu } from '@/components/ui/UserMenu'
 
 // ─── Demo simulation data ─────────────────────────────────────────────────────
 const DEMO_SCENARIOS = [
@@ -291,14 +292,16 @@ export default function Home() {
             <a href="#how-it-works" className="hover:text-white transition-colors">How it works</a>
             <a href="#features" className="hover:text-white transition-colors">Features</a>
             <Link href="/dashboard" className="hover:text-white transition-colors">Dashboard</Link>
-            <Link href="/login" className="hover:text-white transition-colors">Sign in</Link>
           </div>
-          <Link
-            href="/search"
-            className="text-sm bg-blue-600 hover:bg-blue-500 transition-colors text-white font-medium px-4 py-2 rounded-lg"
-          >
-            Get started →
-          </Link>
+          <div className="flex items-center gap-4">
+            <UserMenu />
+            <Link
+              href="/search"
+              className="text-sm bg-blue-600 hover:bg-blue-500 transition-colors text-white font-medium px-4 py-2 rounded-lg"
+            >
+              Get started →
+            </Link>
+          </div>
         </div>
       </nav>
 

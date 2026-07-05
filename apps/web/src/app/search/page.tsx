@@ -14,6 +14,7 @@ import { HowItWorksModal } from '@/components/agents/HowItWorksModal'
 import { SkeletonCard }    from '@/components/ui/SkeletonCard'
 import { SearchError }     from '@/components/ui/SearchError'
 import { CountrySelect }   from '@/components/ui/CountrySelect'
+import { UserMenu }        from '@/components/ui/UserMenu'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Phase = 'form' | 'running' | 'done'
@@ -127,6 +128,7 @@ export default function SearchPage() {
               How it works
             </button>
             <span className="text-xs text-slate-600 hidden sm:block">EU &amp; UK procurement · Updated daily</span>
+            <UserMenu />
           </div>
         </div>
       </header>

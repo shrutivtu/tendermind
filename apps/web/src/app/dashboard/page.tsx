@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { UserMenu } from '@/components/ui/UserMenu'
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
 
@@ -15,14 +16,6 @@ interface SessionRow {
   eval_count: number
   created_at: string
   completed_at: string | null
-}
-
-interface AuthUser {
-  id: string
-  email: string
-  name: string | null
-  organizationId: string
-  role: string
 }
 
 const ALPHA3_TO_2: Record<string, string> = {
@@ -66,7 +59,6 @@ function StatusLabel({ status }: { status: string }) {
 export default function DashboardPage() {
   const [sessions, setSessions] = useState<SessionRow[]>([])
   const [loading, setLoading]   = useState(true)
-  const [user, setUser]         = useState<AuthUser | null>(null)
   const [needsLogin, setNeedsLogin] = useState(false)
 
   const load = async () => {
@@ -77,8 +69,6 @@ export default function DashboardPage() {
         setSessions([])
         return
       }
-      const auth = await me.json()
-      setUser(auth.user)
       setNeedsLogin(false)
 
       const res = await fetch(`${API}/api/sessions`, { credentials: 'include' })
@@ -88,13 +78,6 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }
-
-  const logout = async () => {
-    await fetch(`${API}/api/auth/logout`, { method: 'POST', credentials: 'include' })
-    setUser(null)
-    setNeedsLogin(true)
-    setSessions([])
   }
 
   useEffect(() => {
@@ -117,16 +100,11 @@ export default function DashboardPage() {
             <span className="text-blue-400">⬡</span> TenderMind
           </Link>
           <div className="flex items-center gap-3">
-            {user && <span className="hidden sm:block text-xs text-slate-500">{user.email}</span>}
-            {user && (
-              <button onClick={logout} className="text-xs text-slate-500 hover:text-slate-300 border border-slate-700 hover:border-slate-500 px-3 py-2 rounded-xl transition-colors">
-                Sign out
-              </button>
-            )}
             <Link href="/search"
               className="bg-blue-600 hover:bg-blue-500 transition-colors text-white text-sm font-semibold px-4 py-2 rounded-xl">
               + New search
             </Link>
+            <UserMenu />
           </div>
         </div>
       </header>

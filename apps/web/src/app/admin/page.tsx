@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
+import { UserMenu } from '@/components/ui/UserMenu'
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
 
@@ -105,12 +106,15 @@ export default function AdminPage() {
             <span className="text-slate-700">/</span>
             <span className="text-sm text-slate-500">Admin</span>
           </div>
-          <button
-            onClick={() => void load()}
-            className="text-xs text-slate-500 hover:text-slate-300 border border-slate-700 hover:border-slate-500 px-3 py-1.5 rounded-lg transition-colors"
-          >
-            ↻ Refresh
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => void load()}
+              className="text-xs text-slate-500 hover:text-slate-300 border border-slate-700 hover:border-slate-500 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              ↻ Refresh
+            </button>
+            <UserMenu />
+          </div>
         </div>
       </header>
 

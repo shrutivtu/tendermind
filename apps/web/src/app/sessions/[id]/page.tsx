@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { countryName, fmtDate, fmtValue } from '@/lib/format'
+import { UserMenu } from '@/components/ui/UserMenu'
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
 
@@ -481,6 +482,7 @@ export default function SessionPage() {
             <Link href="/dashboard" className="text-xs text-slate-500 hover:text-slate-300 border border-slate-700 hover:border-slate-500 px-3 py-1.5 rounded-lg transition-colors">
               All sessions →
             </Link>
+            <UserMenu />
           </div>
         </div>
       </header>
