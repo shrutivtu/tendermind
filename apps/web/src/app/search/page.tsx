@@ -274,7 +274,7 @@ export default function SearchPage() {
                 )}
 
                 {/* AI reasoning — open while running, disclosure once done */}
-                {thinkingText && phase === 'running' && <ThinkingFeed text={thinkingText} />}
+                {thinkingText && phase === 'running' && <ThinkingFeed text={thinkingText} streaming />}
                 {thinkingText && phase === 'done' && (
                   <div className="border-t border-slate-800 pt-4">
                     <button

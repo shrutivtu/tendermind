@@ -28,3 +28,5 @@ services:
         value: "10"
       - key: UNLIMITED_SEARCH_EMAILS
         sync: false            # comma-separated emails exempt from search limits
+      - key: ADMIN_EMAILS
+        sync: false            # comma-separated emails allowed on /admin

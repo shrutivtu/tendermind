@@ -5,6 +5,7 @@ import { authRoute } from './routes/auth.js'
 import { profilesRoute } from './routes/profiles.js'
 import { agentsRoute } from './routes/agents.js'
 import { sessionsRoute } from './routes/sessions.js'
+import { adminRoute } from './routes/admin.js'
 
 const app = Fastify({ logger: { level: 'info' } })
 
@@ -18,6 +19,7 @@ await app.register(authRoute)
 await app.register(profilesRoute)
 await app.register(agentsRoute)
 await app.register(sessionsRoute)
+await app.register(adminRoute)
 
 // Health check (Render pings /healthz)
 app.get('/healthz', async () => ({ status: 'ok' }))

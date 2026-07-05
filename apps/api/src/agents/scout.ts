@@ -47,11 +47,19 @@ export interface MatchedNotice {
   fit: 'perfect' | 'good' | 'weak'
 }
 
-// ─── Vector search ────────────────────────────────────────────────────────────
+// ─── Hybrid search (vector + keyword, RRF-fused) ──────────────────────────────
+
+// Distance floor: measured on live data, genuine matches sit at 0.47–0.60
+// cosine distance (text-embedding-3-small); beyond 0.65 is semantic noise.
+const SCOUT_MAX_DISTANCE = Number(process.env.SCOUT_MAX_DISTANCE ?? 0.65)
+
+// Each arm fetches this many before rank fusion picks the final candidates
+const ARM_LIMIT = 50
 
 interface RawNoticeRow {
   id: string
   title: string
+  description: string | null
   buyer_name: string | null
   country: string
   cpv_codes: string[] | null
@@ -64,33 +72,97 @@ interface RawNoticeRow {
   distance: number
 }
 
-async function vectorSearch(
+// Turn a prose company description into an OR-of-terms tsquery string.
+// Postgres drops stopwords itself; we just tokenise and sanitise.
+export function keywordQuery(description: string): string {
+  const tokens = description.toLowerCase().match(/[a-z][a-z0-9]{2,}/g) ?? []
+  return [...new Set(tokens)].slice(0, 24).join(' | ')
+}
+
+async function hybridSearch(
   sql: postgres.Sql,
   queryEmbedding: number[],
+  description: string,
   country?: string,
   cpvCodes?: string[],
   limit = 25
 ): Promise<RawNoticeRow[]> {
   const vectorStr = `[${queryEmbedding.join(',')}]`
+  const tsQuery = keywordQuery(description)
   const countryFilter = country ? sql`AND n.country = ${country}` : sql``
   const cpvFilter =
     cpvCodes && cpvCodes.length > 0
       ? sql`AND n.cpv_codes && ${sql.array(cpvCodes)}`
       : sql``
+  // Never surface tenders whose submission deadline has passed.
+  // NULL deadlines stay in — 87% of notices have no parsed deadline.
+  const liveFilter = sql`(n.deadline IS NULL OR n.deadline > NOW())`
 
+  // Reciprocal Rank Fusion over two rankings:
+  //   vector arm  — cosine distance, capped at SCOUT_MAX_DISTANCE
+  //   keyword arm — Postgres FTS over title + description (ts_rank_cd)
+  // score(id) = Σ 1 / (60 + rank_in_arm); vector-only or keyword-only hits
+  // still qualify via their single arm.
   return sql<RawNoticeRow[]>`
+    WITH vector_hits AS (
+      SELECT
+        n.id,
+        ne.embedding <=> ${vectorStr}::vector AS distance,
+        ROW_NUMBER() OVER (ORDER BY ne.embedding <=> ${vectorStr}::vector ASC) AS rank
+      FROM notices n
+      JOIN notice_embeddings ne ON ne.notice_id = n.id
+      WHERE ${liveFilter}
+        AND (ne.embedding <=> ${vectorStr}::vector) <= ${SCOUT_MAX_DISTANCE}
+        ${countryFilter}
+        ${cpvFilter}
+      ORDER BY distance ASC
+      LIMIT ${ARM_LIMIT}
+    ),
+    keyword_hits AS (
+      SELECT
+        n.id,
+        ROW_NUMBER() OVER (
+          ORDER BY ts_rank_cd(
+            to_tsvector('english', n.title || ' ' || COALESCE(n.description, '')),
+            to_tsquery('english', ${tsQuery})
+          ) DESC
+        ) AS rank
+      FROM notices n
+      WHERE ${tsQuery} <> ''
+        AND ${liveFilter}
+        AND to_tsvector('english', n.title || ' ' || COALESCE(n.description, ''))
+            @@ to_tsquery('english', ${tsQuery})
+        ${countryFilter}
+        ${cpvFilter}
+      LIMIT ${ARM_LIMIT}
+    ),
+    fused AS (
+      SELECT
+        COALESCE(v.id, k.id) AS id,
+        COALESCE(1.0 / (60 + v.rank), 0) + COALESCE(1.0 / (60 + k.rank), 0) AS rrf_score
+      FROM vector_hits v
+      FULL OUTER JOIN keyword_hits k ON k.id = v.id
+    )
     SELECT
-      n.id, n.title, n.buyer_name, n.country, n.cpv_codes,
+      n.id, n.title, n.description, n.buyer_name, n.country, n.cpv_codes,
       n.estimated_value, n.currency,
       n.deadline::text, n.publication_date::text, n.url, n.source,
       ne.embedding <=> ${vectorStr}::vector AS distance
-    FROM notices n
+    FROM fused f
+    JOIN notices n ON n.id = f.id
     JOIN notice_embeddings ne ON ne.notice_id = n.id
-    ${countryFilter}
-    ${cpvFilter}
-    ORDER BY distance ASC
+    ORDER BY f.rrf_score DESC
     LIMIT ${limit}
   `
+}
+
+// Count of currently-biddable notices — for honest status messaging
+async function countLiveNotices(sql: postgres.Sql): Promise<number> {
+  const rows = await sql<{ count: number }[]>`
+    SELECT COUNT(*)::int AS count FROM notices
+    WHERE deadline IS NULL OR deadline > NOW()
+  `
+  return rows[0]?.count ?? 0
 }
 
 // ─── Claude analysis ──────────────────────────────────────────────────────────
@@ -111,27 +183,41 @@ const RECORD_MATCH_TOOL: Anthropic.Tool = {
 }
 
 function buildScoutPrompt(description: string, candidates: RawNoticeRow[]): string {
-  const noticeList = candidates.map((n, i) =>
-    `[${i + 1}] ID: ${n.id}
-     Title: ${n.title}
-     Buyer: ${n.buyer_name ?? 'Unknown'} | Country: ${n.country}
+  const noticeList = candidates.map((n, i) => {
+    const similarity = Math.round((1 - n.distance) * 100)
+    const desc = n.description
+      ? `\n     Description: ${n.description.slice(0, 300)}${n.description.length > 300 ? '…' : ''}`
+      : ''
+    return `[${i + 1}] ID: ${n.id}
+     Title: ${n.title}${desc}
+     Buyer: ${n.buyer_name ?? 'Unknown'} | Country: ${n.country} | Semantic similarity: ${similarity}%
      CPV codes: ${n.cpv_codes?.join(', ') || 'None'}
      Estimated value: ${n.estimated_value ? `€${n.estimated_value.toLocaleString()}` : 'Not specified'}
      Deadline: ${n.deadline ? n.deadline.split('T')[0] : 'Not specified'}`
-  ).join('\n\n')
+  }).join('\n\n')
 
-  return `You are a procurement intelligence agent helping an SME find relevant EU public tenders.
+  return `You are a procurement intelligence agent helping an SME find relevant EU and UK public tenders.
 
 COMPANY PROFILE:
 ${description}
 
-CANDIDATE TENDERS (ranked by semantic similarity):
+CANDIDATE TENDERS (pre-filtered: expired deadlines removed; ranked by hybrid vector + keyword search):
 ${noticeList}
 
 TASK:
 Review these tenders and identify which ones genuinely match the company's capabilities.
 For each relevant match, call record_match with score (0-100), fit level, and a specific reason.
-Only report tenders with score >= 50. Be selective — quality over quantity.`
+
+Scoring calibration:
+- 85-100 / fit "perfect" — the company could bid tomorrow: core service, right sector
+- 65-84  / fit "good"    — solid capability match with a plausible angle
+- 50-64  / fit "weak"    — adjacent work; only report if the angle is concrete
+- Below 50 — do not report
+
+Judge on capability match, not surface keyword overlap: a tender can share words
+with the profile yet need a completely different supplier (and vice versa — the
+semantic similarity % is a hint, not a verdict). Do not stretch weak candidates
+to fill a quota; reporting 3 genuine matches beats 10 padded ones.`
 }
 
 // ─── DB helpers ───────────────────────────────────────────────────────────────
@@ -214,11 +300,14 @@ export async function runScoutAgent(
     onEvent({ type: 'status', message: 'Embedding company profile...' })
     const queryEmbedding = await embed(input.description)
 
-    // Phase 2: Vector search
-    onEvent({ type: 'status', message: 'Searching 3,500+ EU tenders for semantic matches...' })
-    const candidates = await vectorSearch(sql, queryEmbedding, input.country, input.cpvCodes, 25)
+    // Phase 2: Hybrid search (vector + keyword, expired tenders excluded)
+    const liveCount = await countLiveNotices(sql)
+    onEvent({ type: 'status', message: `Searching ${liveCount.toLocaleString()} live EU & UK tenders...` })
+    const candidates = await hybridSearch(
+      sql, queryEmbedding, input.description, input.country, input.cpvCodes, 25
+    )
 
-    onEvent({ type: 'candidates', count: candidates.length, totalSearched: 3567 })
+    onEvent({ type: 'candidates', count: candidates.length, totalSearched: liveCount })
 
     if (candidates.length === 0) {
       await saveScoutResults(sql, sessionId, [])

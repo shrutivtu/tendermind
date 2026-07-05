@@ -60,6 +60,27 @@
   50%      { opacity: 0; }
 }
 
+/* Sweeping highlight over label text — used for "agent is thinking" states */
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+.shimmer-text {
+  background: linear-gradient(90deg, #64748b 0%, #e2e8f0 50%, #64748b 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 2.2s linear infinite;
+}
+
+/* Soft fade at the edges of scrolling reasoning content */
+.reasoning-mask {
+  mask-image: linear-gradient(180deg, transparent, black 14px, black calc(100% - 14px), transparent);
+  -webkit-mask-image: linear-gradient(180deg, transparent, black 14px, black calc(100% - 14px), transparent);
+}
+
 .animate-caret {
   animation: caret-blink 0.9s steps(1) infinite;
 }
