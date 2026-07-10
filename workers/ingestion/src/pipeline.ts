@@ -59,20 +59,29 @@ export async function upsertNotices(
 
 // ─── Upsert embeddings ────────────────────────────────────────────────────────
 
+// Fire inserts concurrently in chunks: postgres.js pipelines them over the
+// connection pool, so a page of embeddings costs a few network round-trips
+// instead of one per row. (Sequential per-row awaits from a CI runner to
+// Frankfurt were ~150ms each — the reason ingestion runs hit 30+ minutes.)
+const EMBED_INSERT_CONCURRENCY = 20
+
 export async function upsertEmbeddings(
   sql: postgres.Sql,
   results: EmbedResult[]
 ): Promise<void> {
-  for (const r of results) {
-    const vectorStr = `[${r.embedding.join(',')}]`
-    await sql`
-      INSERT INTO notice_embeddings (notice_id, embedding, embedded_text)
-      VALUES (${r.noticeId}, ${vectorStr}::vector, ${r.embeddedText})
-      ON CONFLICT (notice_id) DO UPDATE SET
-        embedding     = EXCLUDED.embedding,
-        embedded_text = EXCLUDED.embedded_text,
-        created_at    = now()
-    `
+  for (let i = 0; i < results.length; i += EMBED_INSERT_CONCURRENCY) {
+    const chunk = results.slice(i, i + EMBED_INSERT_CONCURRENCY)
+    await Promise.all(chunk.map(r => {
+      const vectorStr = `[${r.embedding.join(',')}]`
+      return sql`
+        INSERT INTO notice_embeddings (notice_id, embedding, embedded_text)
+        VALUES (${r.noticeId}, ${vectorStr}::vector, ${r.embeddedText})
+        ON CONFLICT (notice_id) DO UPDATE SET
+          embedding     = EXCLUDED.embedding,
+          embedded_text = EXCLUDED.embedded_text,
+          created_at    = now()
+      `
+    }))
   }
 }
 
@@ -97,14 +106,26 @@ export async function runSource(
 
     await upsertNotices(sql, batch, adapter.name)
 
-    const embedInputs = batch.map(n => ({
-      noticeId: n.id,
-      text: buildEmbedText(
-        n.title,
-        n.description,
-        n.cpvCodes.map(code => cpvLabels.get(code) ?? code)
-      ),
-    }))
+    // Only embed notices that don't have an embedding yet. DAYS_BACK overlaps
+    // consecutive runs, so most of each window is already embedded — skipping
+    // it saves the OpenAI calls and DB writes that made runs take 30+ min.
+    // (Tradeoff: a corrigendum that rewords a title keeps its old embedding.)
+    const existing = await sql<{ notice_id: string }[]>`
+      SELECT notice_id FROM notice_embeddings
+      WHERE notice_id = ANY(${batch.map(n => n.id)})
+    `
+    const alreadyEmbedded = new Set(existing.map(r => r.notice_id))
+
+    const embedInputs = batch
+      .filter(n => !alreadyEmbedded.has(n.id))
+      .map(n => ({
+        noticeId: n.id,
+        text: buildEmbedText(
+          n.title,
+          n.description,
+          n.cpvCodes.map(code => cpvLabels.get(code) ?? code)
+        ),
+      }))
     const embedResults = await batchEmbed(embedInputs)
     await upsertEmbeddings(sql, embedResults)
 
