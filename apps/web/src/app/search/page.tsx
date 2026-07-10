@@ -43,7 +43,8 @@ export default function SearchPage() {
   const [showModal,      setShowModal]      = useState(false)
   const [isDemoMode,     setIsDemoMode]     = useState(false)
   const [sessionId,      setSessionId]      = useState('')
-  const [showReasoning,  setShowReasoning]  = useState(false)
+  const [showReasoning,      setShowReasoning]      = useState(false)
+  const [includeHistorical,  setIncludeHistorical]  = useState(false)
 
   const thinkingRef  = useRef('')
   const descRef      = useRef('')
@@ -59,7 +60,7 @@ export default function SearchPage() {
   }, [])
 
   // ── Core search logic ──────────────────────────────────────────────────────
-  const runSearch = async (desc: string, countryFilter?: string) => {
+  const runSearch = async (desc: string, countryFilter?: string, historical = false) => {
     if (!desc.trim()) return
 
     descRef.current = desc
@@ -85,12 +86,12 @@ export default function SearchPage() {
         setPhase('done')
       },
       onError: msg => { setError(msg); setPhase('done') },
-    })
+    }, historical)
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    void runSearch(description, country)
+    void runSearch(description, country, includeHistorical)
   }
 
   const reset = () => {
@@ -194,6 +195,24 @@ export default function SearchPage() {
                   onChange={setCountry}
                 />
               </div>
+
+              {/* Historical toggle */}
+              <label className="flex items-center gap-3 cursor-pointer select-none group">
+                <div
+                  onClick={() => setIncludeHistorical(v => !v)}
+                  className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${
+                    includeHistorical ? 'bg-amber-500' : 'bg-slate-700'
+                  }`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                    includeHistorical ? 'translate-x-4' : 'translate-x-0'
+                  }`} />
+                </div>
+                <span className="text-sm text-slate-400 group-hover:text-slate-300 transition-colors">
+                  Include past tenders
+                  <span className="ml-1.5 text-xs text-slate-600">— see what contracts existed in your space</span>
+                </span>
+              </label>
 
               <button
                 type="submit"

@@ -10,9 +10,10 @@ import { runScoutAgent, type AgentEvent } from '../agents/scout.js'
 import { enforceSearchLimit, getRequestContext, recordSearchUsage } from '../lib/auth.js'
 
 const ScoutRequestSchema = z.object({
-  description: z.string().min(10).max(2000),
-  country:     z.string().length(3).optional(),
-  cpvCodes:    z.array(z.string()).optional(),
+  description:        z.string().min(10).max(2000),
+  country:            z.string().length(3).optional(),
+  cpvCodes:           z.array(z.string()).optional(),
+  includeHistorical:  z.boolean().optional(),
 })
 
 export const agentsRoute: FastifyPluginAsync = async (app) => {
@@ -78,9 +79,10 @@ export const agentsRoute: FastifyPluginAsync = async (app) => {
     try {
       await runScoutAgent(
         {
-          description: body.data.description,
-          country:     body.data.country,
-          cpvCodes:    body.data.cpvCodes,
+          description:        body.data.description,
+          country:            body.data.country,
+          cpvCodes:           body.data.cpvCodes,
+          includeHistorical:  body.data.includeHistorical,
         },
         sql,
         send,

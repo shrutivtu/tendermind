@@ -19,6 +19,7 @@ export interface ScoutInput {
   country?: string
   cpvCodes?: string[]
   maxResults?: number
+  includeHistorical?: boolean   // if true, skip deadline filters (show all notices)
 }
 
 export type AgentEvent =
@@ -85,7 +86,8 @@ async function hybridSearch(
   description: string,
   country?: string,
   cpvCodes?: string[],
-  limit = 25
+  limit = 25,
+  includeHistorical = false
 ): Promise<RawNoticeRow[]> {
   const vectorStr = `[${queryEmbedding.join(',')}]`
   const tsQuery = keywordQuery(description)
@@ -94,9 +96,20 @@ async function hybridSearch(
     cpvCodes && cpvCodes.length > 0
       ? sql`AND n.cpv_codes && ${sql.array(cpvCodes)}`
       : sql``
-  // Never surface tenders whose submission deadline has passed.
-  // NULL deadlines stay in — 87% of notices have no parsed deadline.
-  const liveFilter = sql`(n.deadline IS NULL OR n.deadline > NOW())`
+
+  // Deadline filter logic (skipped entirely in historical mode):
+  // - Known deadline: must be in the future
+  // - NULL deadline: data-backed cutoff of 21 days from publication.
+  //   Analysis of 2,112 notices with deadlines shows median window = 24 days,
+  //   70.8% close within 30 days. 21 days is the conservative cutoff for
+  //   "probably still open" when we have no deadline info.
+  const liveFilter = includeHistorical
+    ? sql`1=1`
+    : sql`(
+        (n.deadline IS NOT NULL AND n.deadline > NOW())
+        OR
+        (n.deadline IS NULL AND n.publication_date > NOW() - INTERVAL '21 days')
+      )`
 
   // Reciprocal Rank Fusion over two rankings:
   //   vector arm  — cosine distance, capped at SCOUT_MAX_DISTANCE
@@ -307,7 +320,7 @@ export async function runScoutAgent(
     const liveCount = await countLiveNotices(sql)
     onEvent({ type: 'status', message: `Searching ${liveCount.toLocaleString()} live EU & UK tenders...` })
     const candidates = await hybridSearch(
-      sql, queryEmbedding, input.description, input.country, input.cpvCodes, 25
+      sql, queryEmbedding, input.description, input.country, input.cpvCodes, 25, input.includeHistorical
     )
 
     onEvent({ type: 'candidates', count: candidates.length, totalSearched: liveCount })

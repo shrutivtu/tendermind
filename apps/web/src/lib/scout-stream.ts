@@ -56,13 +56,14 @@ export function parseSSELine(line: string): SSEEvent | null {
 export async function runScout(
   description: string,
   country: string | undefined,
-  callbacks: ScoutCallbacks
+  callbacks: ScoutCallbacks,
+  includeHistorical = false
 ): Promise<void> {
   const res = await fetch(`${API_URL}/api/agents/scout`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ description, country }),
+    body: JSON.stringify({ description, country, includeHistorical }),
   })
 
   if (!res.ok || !res.body) {
