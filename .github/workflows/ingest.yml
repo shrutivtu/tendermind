@@ -25,10 +25,10 @@ concurrency:
   cancel-in-progress: false  # never kill a half-finished ingestion run
 
 jobs:
-  ingest:
-    name: EU + UK ingestion
+  ingest-eu:
+    name: EU ingestion (TED)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -43,17 +43,36 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # SOURCE=all runs EU (TED) then UK (Find a Tender) sequentially.
-      # The worker isolates per-source failures internally: one broken
-      # source doesn't stop the other, and the run exits non-zero if
-      # any source failed.
-      - name: Ingest EU + UK
+      - name: Ingest EU tenders (TED)
         run: npx tsx workers/ingestion/src/index.ts
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          SOURCE: all
           DAYS_BACK: '2'
-          # Find a Tender's cert chains to ISRG Root YR, which trust stores
-          # don't ship yet — see workers/ingestion/certs/isrg-root-yr.pem
+
+  ingest-uk:
+    name: UK ingestion (Find a Tender)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Ingest UK tenders (Find a Tender)
+        run: npx tsx workers/uk-ingestion/src/index.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DAYS_BACK: '2'
+          # Find a Tender cert chains to ISRG Root YR (not in trust stores yet)
           NODE_EXTRA_CA_CERTS: workers/ingestion/certs/isrg-root-yr.pem
