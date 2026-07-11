@@ -85,6 +85,37 @@ export async function upsertEmbeddings(
   }
 }
 
+// ─── Prune stale notices ──────────────────────────────────────────────────────
+// The DB is a rolling cache of biddable tenders, not an archive (live TED
+// search is the source of truth for EU). Retention windows agreed 2026-07:
+//   - award/announcement types: never wanted (also excluded at fetch now)
+//   - known deadline: keep 7 days past deadline
+//   - no deadline: keep 45 days from publication (median bid window is ~24d;
+//     the Scout stops searching them at 21d — 45d keeps a buffer for the
+//     "include historical" toggle)
+// notice_embeddings rows go automatically (FK ON DELETE CASCADE).
+
+export interface PruneStats {
+  awards: number
+  expired: number
+  stale: number
+}
+
+export async function pruneStaleNotices(sql: postgres.Sql): Promise<PruneStats> {
+  const awards = await sql`
+    DELETE FROM notices WHERE type LIKE 'can-%' OR type = 'veat'
+  `
+  const expired = await sql`
+    DELETE FROM notices
+    WHERE deadline IS NOT NULL AND deadline < NOW() - INTERVAL '7 days'
+  `
+  const stale = await sql`
+    DELETE FROM notices
+    WHERE deadline IS NULL AND publication_date < NOW() - INTERVAL '45 days'
+  `
+  return { awards: awards.count, expired: expired.count, stale: stale.count }
+}
+
 // ─── Run one source through the pipeline ──────────────────────────────────────
 
 export interface RunStats {

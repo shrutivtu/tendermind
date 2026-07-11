@@ -8,12 +8,12 @@
 //   their national currency). Values are converted to EUR at ingestion time
 //   using ECB daily reference rates.
 
-import type { TEDNoticeRaw } from './client.js'
+import { EXCLUDED_NOTICE_TYPES, type TEDNoticeRaw } from './client.js'
 import { currencyForCountry, toEur, type FxRates } from '../../fx-rates.js'
 import type { NormalizedNotice } from '../../types.js'
 
 // Pick preferred language from { eng: "...", deu: "..." }
-function pickLang(
+export function pickLang(
   obj: Record<string, string> | undefined,
   prefer = 'eng'
 ): { value: string; lang: string } | null {
@@ -23,15 +23,16 @@ function pickLang(
   return first ? { value: first[1], lang: first[0] } : null
 }
 
-// Pick from { ron: ["Buyer A", "Buyer B"] } — join multiple buyers
-function pickLangMulti(
+// Pick from { ron: ["Buyer A", "Buyer B"] } — join multiple values
+export function pickLangMulti(
   obj: Record<string, string[]> | undefined,
-  prefer = 'eng'
+  prefer = 'eng',
+  joiner = ', '
 ): string | null {
   if (!obj || Object.keys(obj).length === 0) return null
   const arr = obj[prefer] ?? Object.values(obj)[0]
   if (!arr || arr.length === 0) return null
-  return arr.join(', ')
+  return arr.join(joiner)
 }
 
 // Parse TED date strings like "2026-06-08+02:00" or "20260608"
@@ -54,6 +55,11 @@ export function normalizeNotice(raw: TEDNoticeRaw, fxRates: FxRates): Normalized
   const id = raw['publication-number']
   if (!id) return null
 
+  // Guard against award types slipping past the query-level exclusion —
+  // they're unbiddable and the pipeline shouldn't spend embeddings on them.
+  const rawType = raw['notice-type'] ?? ''
+  if (EXCLUDED_NOTICE_TYPES.includes(rawType)) return null
+
   const publicationDate = parseTEDDate(raw['publication-date'])
   if (!publicationDate) return null
 
@@ -64,6 +70,13 @@ export function normalizeNotice(raw: TEDNoticeRaw, fxRates: FxRates): Normalized
 
   // Buyer name: multi-value per language
   const buyerName = pickLangMulti(raw['buyer-name'])
+
+  // Description: procedure-level text, falling back to per-lot descriptions.
+  // (Both come back on the search response — no per-notice fetch needed.)
+  const description =
+    pickLang(raw['description-proc'])?.value ??
+    pickLangMulti(raw['description-lot'], 'eng', '\n') ??
+    null
 
   // CPV codes: deduplicate (API often repeats per lot)
   const cpvCodes = [...new Set(raw['classification-cpv'] ?? [])]
@@ -100,7 +113,7 @@ export function normalizeNotice(raw: TEDNoticeRaw, fxRates: FxRates): Normalized
     type,
     title,
     titleOriginal: lang !== 'eng' ? title : null,
-    description: null,
+    description,
     language: lang.toUpperCase(),
     country,
     buyerName,

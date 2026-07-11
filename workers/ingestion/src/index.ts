@@ -10,7 +10,7 @@
 
 import postgres from 'postgres'
 import { fetchECBRates } from './fx-rates.js'
-import { getCPVLabels, runSource } from './pipeline.js'
+import { getCPVLabels, runSource, pruneStaleNotices } from './pipeline.js'
 import { tedSource } from './sources/ted/index.js'
 import { findTenderSource } from './sources/find-tender/index.js'
 import type { SourceAdapter } from './types.js'
@@ -73,6 +73,21 @@ async function main() {
       // One broken source shouldn't stop the others from staying fresh
       console.error(`  ❌ ${adapter.label} failed: ${err instanceof Error ? err.message : err}\n`)
       failures.push(adapter.name)
+    }
+  }
+
+  // Prune the rolling cache (skippable via SKIP_PRUNE=1 for debugging)
+  if (process.env.SKIP_PRUNE !== '1') {
+    try {
+      const pruned = await pruneStaleNotices(sql)
+      console.log(`── Prune ──`)
+      console.log(`  ✓ removed ${pruned.awards} award-type, ${pruned.expired} expired, ${pruned.stale} stale notices\n`)
+      // No explicit VACUUM here: autovacuum reclaims dead tuples for reuse,
+      // and an explicit VACUUM on the embeddings table takes minutes. To
+      // shrink the REPORTED database size, run `VACUUM FULL notice_embeddings`
+      // (then `VACUUM FULL notices`) manually in the Supabase SQL editor.
+    } catch (err) {
+      console.warn(`  ⚠️  prune step failed (non-fatal): ${err instanceof Error ? err.message : err}\n`)
     }
   }
 

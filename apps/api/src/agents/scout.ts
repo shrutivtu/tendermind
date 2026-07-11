@@ -8,6 +8,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import postgres from 'postgres'
 import { embed } from '../lib/embedder.js'
 import { runAnalystAgent } from './analyst.js'
+import { liveTedSearch } from './ted-live.js'
 import type { RequestContext } from '../lib/auth.js'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -169,11 +170,17 @@ async function hybridSearch(
   `
 }
 
-// Count of currently-biddable notices — for honest status messaging
-async function countLiveNotices(sql: postgres.Sql): Promise<number> {
+// Count of currently-biddable notices — for honest status messaging.
+// Must mirror hybridSearch's live filter (incl. the 21-day NULL-deadline rule).
+async function countLiveNotices(sql: postgres.Sql, source?: string): Promise<number> {
+  const sourceFilter = source ? sql`AND source = ${source}` : sql``
   const rows = await sql<{ count: number }[]>`
     SELECT COUNT(*)::int AS count FROM notices
-    WHERE deadline IS NULL OR deadline > NOW()
+    WHERE (
+      (deadline IS NOT NULL AND deadline > NOW())
+      OR (deadline IS NULL AND publication_date > NOW() - INTERVAL '21 days')
+    )
+    ${sourceFilter}
   `
   return rows[0]?.count ?? 0
 }
@@ -214,7 +221,7 @@ function buildScoutPrompt(description: string, candidates: RawNoticeRow[]): stri
 COMPANY PROFILE:
 ${description}
 
-CANDIDATE TENDERS (pre-filtered: expired deadlines removed; ranked by hybrid vector + keyword search):
+CANDIDATE TENDERS (pre-filtered and ranked by relevance to the profile):
 ${noticeList}
 
 TASK:
@@ -316,14 +323,56 @@ export async function runScoutAgent(
     onEvent({ type: 'status', message: 'Embedding company profile...' })
     const queryEmbedding = await embed(input.description)
 
-    // Phase 2: Hybrid search (vector + keyword, expired tenders excluded)
-    const liveCount = await countLiveNotices(sql)
-    onEvent({ type: 'status', message: `Searching ${liveCount.toLocaleString()} live EU & UK tenders...` })
-    const candidates = await hybridSearch(
+    // Phase 2: candidate search.
+    // Primary arm: LIVE TED search (query planner → expert query → cosine
+    // rerank against cached embeddings). Skipped in historical mode (live
+    // queries only cover open deadlines) and for UK-only searches (TED has
+    // no UK notices). The local pgvector/FTS hybrid is both the fallback
+    // when TED misbehaves and the permanent arm for UK coverage.
+    let candidates: RawNoticeRow[] = []
+    let totalSearched = 0
+    let liveArmUsed = false
+
+    const tryLive = !input.includeHistorical && input.country !== 'GBR'
+    if (tryLive) {
+      try {
+        onEvent({ type: 'status', message: 'Planning a targeted TED query...' })
+        const live = await liveTedSearch(
+          sql, queryEmbedding, input.description, input.country, 25, SCOUT_MAX_DISTANCE
+        )
+        liveArmUsed = true
+        const ukCount = await countLiveNotices(sql, 'find-tender')
+        totalSearched = live.totalOnTed + ukCount
+        onEvent({
+          type: 'status',
+          message: `Searching ${live.totalOnTed.toLocaleString()} open EU tenders live on TED (CPV ${live.cpvPrefixes.join(', ')}) + ${ukCount.toLocaleString()} UK notices...`,
+        })
+        candidates = live.candidates
+      } catch (err) {
+        console.warn('[Scout] live TED arm failed, using local index:', err instanceof Error ? err.message : err)
+      }
+    }
+
+    if (!liveArmUsed) {
+      const liveCount = await countLiveNotices(sql)
+      totalSearched = liveCount
+      onEvent({ type: 'status', message: `Searching ${liveCount.toLocaleString()} live EU & UK tenders...` })
+    }
+
+    // Local hybrid arm: the full search when live was skipped/failed;
+    // otherwise it supplements live-TED results (UK + anything cached
+    // that the planned query's CPV filter missed).
+    const localRows = await hybridSearch(
       sql, queryEmbedding, input.description, input.country, input.cpvCodes, 25, input.includeHistorical
     )
+    const seen = new Set(candidates.map(c => c.id))
+    for (const row of localRows) {
+      if (!seen.has(row.id)) candidates.push(row)
+    }
+    candidates.sort((a, b) => a.distance - b.distance)
+    candidates = candidates.slice(0, 25)
 
-    onEvent({ type: 'candidates', count: candidates.length, totalSearched: liveCount })
+    onEvent({ type: 'candidates', count: candidates.length, totalSearched })
 
     if (candidates.length === 0) {
       await saveScoutResults(sql, sessionId, [])

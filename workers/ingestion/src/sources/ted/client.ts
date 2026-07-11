@@ -20,6 +20,8 @@ export interface TEDNoticeRaw {
   'publication-number': string
   'notice-type'?: string                         // plain string e.g. "can-standard"
   'notice-title'?: Record<string, string>        // { eng: "...", deu: "..." }
+  'description-proc'?: Record<string, string>    // procedure description { fra: "..." }
+  'description-lot'?: Record<string, string[]>   // per-lot descriptions { fra: ["lot1", "lot2"] }
   'buyer-name'?: Record<string, string[]>        // { ron: ["Buyer A", "Buyer B"] }
   'buyer-country'?: string[]                     // ["ROU", "DEU"]
   'classification-cpv'?: string[]                // ["33696500", "45000000"] — codes only
@@ -79,11 +81,17 @@ function tedDate(daysBack: number): string {
   return date.toISOString().split('T')[0].replace(/-/g, '')  // YYYYMMDD
 }
 
-// All notices published in the last N days
-// TD=3 is old-form contract notices; eForms notices (can-standard, cn-standard, etc.)
-// don't match old TD codes — using date-only filter to catch everything.
+// Award/announcement types — already-decided contracts, not biddable.
+// The product searches live tenders only; award intel comes from the
+// award-sync worker (SPARQL), not this pipeline.
+export const EXCLUDED_NOTICE_TYPES = ['can-standard', 'can-social', 'can-desg', 'can-modif', 'veat']
+
+// Biddable notices published in the last N days.
+// Award types are excluded at the API — no point downloading ~half the feed
+// just to skip it. (TD=3 old-form codes don't match eForms; date filter +
+// type negation catches everything we want.)
 export function buildRecentNoticesQuery(daysBack: number = 2): string {
-  return `PD>=${tedDate(daysBack)}`
+  return `PD>=${tedDate(daysBack)} AND NOT notice-type IN (${EXCLUDED_NOTICE_TYPES.join(' ')})`
 }
 
 // Fields we want for each notice — verified against live API response
@@ -91,6 +99,8 @@ export const NOTICE_FIELDS = [
   'publication-number',
   'notice-type',
   'notice-title',
+  'description-proc',
+  'description-lot',
   'buyer-name',
   'buyer-country',
   'classification-cpv',

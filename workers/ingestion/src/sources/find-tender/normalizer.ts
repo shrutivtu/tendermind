@@ -79,6 +79,10 @@ export function normalizeRelease(
   const id = `ft-${release.id}`   // prefix to avoid collision with TED IDs
   if (!release.date) return null
 
+  // The fetch already filters stages=tender, but guard anyway: award
+  // releases are unbiddable and shouldn't cost embeddings.
+  if (release.tag?.includes('award')) return null
+
   const publicationDate = new Date(release.date)
   if (isNaN(publicationDate.getTime())) return null
 
