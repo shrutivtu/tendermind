@@ -51,9 +51,11 @@ EU and UK public procurement is a multi-trillion euro/year market, but navigatin
 ### Two-agent pipeline
 
 **Scout** (`apps/api/src/agents/scout.ts`)
-- Takes company description + optional country filter
+- Takes company description + optional country/historical filter
 - Generates an OpenAI embedding (`text-embedding-3-small`, 1536 dimensions)
-- Runs cosine similarity search against pre-indexed notice embeddings (`<=>` operator via pgvector)
+- Runs **hybrid search**: vector arm (pgvector cosine similarity) + keyword arm (Postgres FTS), fused with Reciprocal Rank Fusion (RRF)
+- Filters out expired tenders; NULL-deadline notices older than 21 days treated as closed (data-backed: median tender window is 24 days)
+- Claude analyses top 25 candidates, calls `record_match` tool for genuine fits
 - Streams matches to the browser via SSE as they're found
 - Creates a DB session, saves matches, then fires the Analyst as a background job
 
@@ -69,20 +71,19 @@ EU and UK public procurement is a multi-trillion euro/year market, but navigatin
 ```
 TED API (REST v3)          Find a Tender API (OCDS)
      │                              │
-     ▼                              ▼
-EU Ingestion Worker         UK Ingestion Worker   (both run every 6h)
-     │                              │
-     ├─► Normalize notices          ├─► Normalize OCDS releases
-     │   currency → EUR (ECB)       │   GBP → EUR (ECB, inverted)
-     │   source = 'ted'             │   source = 'find-tender'
-     │                              │   id prefix = 'ft-'
      └──────────────┬───────────────┘
                     ▼
-         Upsert into notices table (PostgreSQL)
+     Single ingestion worker  (SOURCE=ted|find-tender|all)
+     Runs every 6h via GitHub Actions
                     │
-                    ▼
-         Embed: title + description + CPV labels
-              → OpenAI text-embedding-3-small
+     ├─► Normalize: title, description, CPV codes, deadline
+     │   Currency → EUR via ECB daily rates (GBP inverted)
+     │   source = 'ted' | 'find-tender'
+     │
+     ├─► Upsert into notices table (PostgreSQL)
+     │
+     └─► Embed new notices only (skips already-embedded)
+              → OpenAI text-embedding-3-small (1536 dims)
               → store in notice_embeddings (pgvector)
 ```
 
@@ -220,7 +221,7 @@ SOURCE=ted npx tsx --env-file=../../.env src/index.ts
 SOURCE=find-tender npx tsx --env-file=../../.env src/index.ts
 ```
 
-The worker fetches the last 2 days of notices per source (`DAYS_BACK` to override), normalises them, converts currencies to EUR at ECB rates, generates embeddings, and upserts into Supabase. EU ingestion (~3,500 notices) takes about 5 minutes. In production this runs every 6 hours via GitHub Actions (`.github/workflows/ingest.yml`).
+The worker fetches the last 2 days of notices per source (`DAYS_BACK` to override), normalises them, converts currencies to EUR at ECB rates, and upserts into Supabase. Only new notices get embedded — re-runs skip already-embedded notices, keeping typical runs under 3 minutes. In production this runs every 6 hours via GitHub Actions (`.github/workflows/ingest.yml`).
 
 ### 6. Start the app
 
@@ -251,12 +252,12 @@ npm run dev
 ## API reference
 
 ```
-POST /api/scout
-  Body: { companyDescription, countryFilter? }
+POST /api/agents/scout
+  Body: { description, country?, includeHistorical? }
   Response: SSE stream
     { type: 'session_id', id: string }
     { type: 'match', notice: MatchedNotice }
-    { type: 'done', count: number }
+    { type: 'done', totalMatches: number }
 
 GET /api/sessions
   Returns last 20 sessions with eval counts
